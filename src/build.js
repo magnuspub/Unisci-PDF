@@ -15,14 +15,20 @@
 // file, so the single file works offline and makes no network requests. It also writes
 // THIRD-PARTY-NOTICES.txt and puts the same notices, with the text of the GNU GPL, inside the file.
 //
+// The folder docs/ is the same app as a site that can be installed (GitHub Pages serves it):
+// docs/index.html is a copy of Unisci_PDF.html, next to the manifest that lets the installed app
+// open PDF files and the service worker that keeps it working without a network.
+//
 // Usage: npm install, then: node src/build.js [node_modules folder] [output file]
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const root = path.join(__dirname, '..');
 const modules = path.resolve(process.argv[2] || path.join(root, 'node_modules'));
 const outFile = path.resolve(process.argv[3] || path.join(root, 'Unisci_PDF.html'));
 const noticesFile = path.join(path.dirname(outFile), 'THIRD-PARTY-NOTICES.txt');
+const site = path.join(path.dirname(outFile), 'docs');
 
 const read = (p) => fs.readFileSync(path.join(modules, p), 'utf8');
 const pkg = (p) => JSON.parse(read(p + '/package.json'));
@@ -78,6 +84,7 @@ const WORKER_BOOT = `window.__pdfWorkerReady = new Promise(function (resolve) {
   } catch (e) { finish(false); }
 });`;
 
+swap('<title>Unisci PDF</title>\n', '<title>Unisci PDF</title>\n<link rel="manifest" href="manifest.webmanifest">\n');
 swap('<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">\n', '');
 swap(cdnLib, '<script>' + safe('pdf-lib', read('@cantoo/pdf-lib/dist/pdf-lib.min.js')) + '</script>');
 swap(cdnPdfjs,
@@ -166,5 +173,57 @@ for (const host of ['cdnjs.cloudflare.com', 'cdn.jsdelivr.net', 'fonts.googleapi
 fs.mkdirSync(path.dirname(outFile), { recursive: true });
 fs.writeFileSync(outFile, html);
 fs.writeFileSync(noticesFile, notices + '\n');
+
+// ---- the installable site ----------------------------------------------------
+const manifest = {
+  name: 'Unisci PDF',
+  short_name: 'Unisci PDF',
+  description: 'Legge, modifica e unisce i PDF sul tuo computer: testo, firme, evidenziazioni e note.',
+  lang: 'it',
+  start_url: './',
+  scope: './',
+  display: 'standalone',
+  background_color: '#e8ecf1',
+  theme_color: '#e8ecf1',
+  icons: [
+    { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+    { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+    { src: 'icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+  ],
+  // once installed, the system can open PDF files with the app
+  file_handlers: [{ action: './', accept: { 'application/pdf': ['.pdf'] } }]
+};
+// The version changes whenever the app changes, so an installed copy picks up the new one.
+const version = crypto.createHash('sha1').update(html).update(JSON.stringify(manifest)).digest('hex').slice(0, 12);
+const worker = `// Unisci PDF: keeps the installed app working without a network. Written by src/build.js.
+const CACHE = 'unisci-pdf-${version}';
+const SHELL = ['./', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
+});
+self.addEventListener('activate', (event) => {
+  event.waitUntil(caches.keys()
+    .then((keys) => Promise.all(keys.filter((k) => k.startsWith('unisci-pdf-') && k !== CACHE).map((k) => caches.delete(k))))
+    .then(() => self.clients.claim()));
+});
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
+  event.respondWith(caches.match(request, { ignoreSearch: true }).then((hit) => {
+    if (hit) return hit;
+    return fetch(request).catch(() => (request.mode === 'navigate' ? caches.match('./') : Response.error()));
+  }));
+});
+`;
+fs.mkdirSync(site, { recursive: true });
+fs.writeFileSync(path.join(site, 'index.html'), html);
+fs.writeFileSync(path.join(site, 'manifest.webmanifest'), JSON.stringify(manifest, null, 2) + '\n');
+fs.writeFileSync(path.join(site, 'sw.js'), worker);
+fs.writeFileSync(path.join(site, '.nojekyll'), '');
+for (const icon of ['icon-192.png', 'icon-512.png', 'icon-maskable-512.png']) {
+  if (!fs.existsSync(path.join(site, 'icons', icon))) throw new Error('missing docs/icons/' + icon + ': run python3 src/make-icons.py');
+}
 console.log('wrote', outFile, (html.length / 1048576).toFixed(2) + ' MB');
 console.log('wrote', noticesFile, 'escapes:', JSON.stringify(escaped));
+console.log('wrote', site, 'version', version);
