@@ -26,7 +26,7 @@ Serve Edge o Chrome. Una volta installata, l'app si apre con un doppio clic su u
 
 1. Apri <https://magnuspub.github.io/Unisci-PDF/> con Edge o Chrome.
 2. Installa l'app dal menu del browser (la voce si chiama "Installa" o "App").
-3. In Esplora file fai clic con il tasto destro su un PDF, scegli "Apri con", poi "Scegli un'altra app", seleziona Unisci PDF e conferma "Sempre".
+3. In Esplora file fai clic con il tasto destro su un PDF, scegli "Apri con", poi "Scegli un'altra app", seleziona Unisci PDF e conferma "Sempre". Lo stesso si può fare con un file `.p7m`.
 4. La prima volta il browser chiede se permettere all'app di aprire i file: conferma.
 
 Aperto così, un PDF si presenta in lettura con gli strumenti a portata di mano. **Salva** riscrive il file che hai aperto, dopo che il browser ti ha chiesto il permesso; **Salva una copia** lascia l'originale com'è.
@@ -34,19 +34,23 @@ Aperto così, un PDF si presenta in lettura con gli strumenti a portata di mano.
 ## Cosa fa
 
 - **Lettura.** Le pagine una sotto l'altra, con zoom e numero di pagina.
+- **Ricerca.** Il pulsante "Cerca", o Ctrl+F, trova una parola o una frase in tutto il documento e segna ogni punto sulla pagina. Invio passa al risultato successivo, Maiusc+Invio al precedente. Maiuscole e accenti non contano, a meno che tu scriva la parola con l'accento: "perche" trova anche "perché", "è" trova solo "è".
 - **Modifica del testo esistente.** Clicchi una riga e la riscrivi. Il testo vecchio viene tolto dal file, non coperto, e quello nuovo usa il carattere del documento.
 - **Testi e firme.** Aggiungi caselle di testo e la tua firma, disegnata con mouse o dito oppure caricata da una foto.
 - **Evidenziatore e fumetti.** Evidenziazioni in più colori e fumetti con una nota che compare al passaggio del mouse. Sono salvati come annotazioni del PDF, quindi restano tali anche negli altri lettori.
 - **Unione e ordine.** Carichi più PDF, anche in più riprese, e trascini le miniature per decidere l'ordine. Selezionando più pagine si spostano insieme.
 - **Eliminazione e rotazione.** Per la singola pagina, per quelle selezionate o per un file intero. "Annulla" riporta indietro l'ultima modifica.
 - **PDF protetti.** Se un PDF richiede la password, l'app la chiede e poi lo tratta come gli altri. Il file salvato non è protetto.
+- **File firmati (.p7m).** Apre il PDF contenuto in un file firmato `.p7m`, anche firmato più volte, per leggerlo o unirlo ad altri, e riporta chi ha firmato secondo i certificati. La firma non viene verificata. Il file `.p7m` non viene mai modificato: "Salva" scarica un PDF a parte, che non è firmato.
 
 ## Limiti
 
 - La modifica del testo cambia la singola riga: il paragrafo non va a capo da solo.
 - Un PDF contiene solo le lettere usate nel documento. Se ne scrivi una che manca, quella lettera esce in un carattere simile.
 - Le scansioni e il testo dentro blocchi incorporati non sono modificabili.
+- La ricerca non trova nulla nelle scansioni senza testo, né le parole spezzate a fine riga con il trattino. Il segno sul risultato può essere spostato di poco rispetto alla parola.
 - La firma è un'immagine, non una firma digitale con certificato.
+- Dei file `.p7m` l'app apre il contenuto senza controllare che la firma sia valida. Se dentro non c'è un PDF (per esempio una fattura elettronica XML), o se il file è cifrato, non lo apre.
 - Le protezioni diverse dalla password standard dei PDF non sono supportate.
 - I moduli PDF non si possono compilare.
 - L'apertura con doppio clic funziona solo con l'app installata da Edge o Chrome; Firefox non la prevede.

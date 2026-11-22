@@ -190,8 +190,8 @@ const manifest = {
     { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
     { src: 'icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
   ],
-  // once installed, the system can open PDF files with the app
-  file_handlers: [{ action: './', accept: { 'application/pdf': ['.pdf'] } }]
+  // once installed, the system can open PDF files and signed .p7m files with the app
+  file_handlers: [{ action: './', accept: { 'application/pdf': ['.pdf'], 'application/pkcs7-mime': ['.p7m'] } }]
 };
 // The version changes whenever the app changes, so an installed copy picks up the new one.
 const version = crypto.createHash('sha1').update(html).update(JSON.stringify(manifest)).digest('hex').slice(0, 12);
