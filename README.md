@@ -36,10 +36,32 @@ I PDF vengono elaborati sul tuo computer: l'app non li invia da nessuna parte e 
 - La firma è un'immagine, non una firma digitale con certificato.
 - Le protezioni diverse dalla password standard dei PDF non sono supportate.
 
+## Licenza
+
+Unisci PDF è software libero, distribuito con licenza GNU General Public License versione 3 (GPL-3.0): il testo è nel file [`LICENSE`](LICENSE). È distribuito senza alcuna garanzia.
+
+Copyright (C) 2026 magnuspub
+
 ## Librerie incluse
 
-Il file contiene al suo interno queste librerie, ciascuna con la propria licenza:
+`Unisci_PDF.html` contiene al suo interno queste librerie, ciascuna con la propria licenza:
 
 - [@cantoo/pdf-lib](https://github.com/cantoo-scribe/pdf-lib) 2.11.1, licenza MIT
 - [PDF.js](https://github.com/mozilla/pdf.js) 3.11.174, licenza Apache-2.0
 - [SortableJS](https://github.com/SortableJS/Sortable) 1.15.2, licenza MIT
+
+I testi completi delle licenze e le note di copyright, comprese quelle dei componenti contenuti in pdf-lib, sono in [`THIRD-PARTY-NOTICES.txt`](THIRD-PARTY-NOTICES.txt). Gli stessi testi sono dentro `Unisci_PDF.html` e si leggono dall'app, alla voce "Licenze e crediti" in fondo alla pagina.
+
+## Sorgenti e ricostruzione
+
+- [`src/index.html`](src/index.html) è il sorgente dell'app.
+- [`src/build.js`](src/build.js) ci mette dentro le librerie e le licenze e produce `Unisci_PDF.html` e `THIRD-PARTY-NOTICES.txt`.
+
+Per ricostruire il file servono Node.js e npm:
+
+```
+npm install
+npm run build
+```
+
+Le librerie vengono scaricate da npm nelle versioni fissate in `package.json`.

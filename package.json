@@ -1,0 +1,15 @@
+{
+  "name": "unisci-pdf",
+  "private": true,
+  "description": "Unisce più PDF in un unico file nel browser: riordino delle pagine, modifica del testo, firme, evidenziazioni e note.",
+  "license": "GPL-3.0-only",
+  "repository": "github:magnuspub/Unisci-PDF",
+  "scripts": {
+    "build": "node src/build.js"
+  },
+  "devDependencies": {
+    "@cantoo/pdf-lib": "2.11.1",
+    "pdfjs-dist": "3.11.174",
+    "sortablejs": "1.15.2"
+  }
+}
