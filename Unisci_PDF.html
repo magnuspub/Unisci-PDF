@@ -29,6 +29,7 @@
   --sheet-shadow: rgba(23, 32, 43, .30);
   --paper: #ffffff;        /* a PDF page is white in both themes */
   --on-paper: #1d4ed8;     /* editing frames drawn on the paper */
+  --paper-ink: #111111;    /* text typed onto the paper */
   --veil: rgba(10, 14, 20, .55);
   --f1: #0b8177; --f2: #c2600a; --f3: #a82c86; --f4: #3f7d1a;
   --f5: #6247c9; --f6: #9c4a22; --f7: #0a74a6; --f8: #7a6b0c;
@@ -366,6 +367,72 @@ dialog p { margin: 0 0 12px; }
   cursor: crosshair;
 }
 
+.btn.tool[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.ctl { display: flex; align-items: center; gap: 8px; }
+.ed-ctx {
+  display: flex; align-items: center; gap: 12px;
+  min-height: 48px; padding: 6px 14px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto; white-space: nowrap;
+}
+.ed-ctx > * { flex: none; }
+.sw-any { width: 28px; height: 26px; padding: 0; background: none; border: 0; cursor: pointer; }
+.ed-body { position: relative; flex: 1; min-height: 0; display: flex; }
+.ed-body .ed-stage { flex: 1; min-width: 0; }
+
+/* lines of text already on the page, shown while "Modifica testo" is on */
+.tl {
+  position: absolute; left: 0; top: 0; display: none;
+  transform-origin: 0 0;
+  border-bottom: 1px dotted var(--on-paper);
+  cursor: text;
+}
+.ed-layer.tool-edit .tl { display: block; }
+.tl:hover, .tl:focus-visible { background: color-mix(in srgb, var(--on-paper) 14%, transparent); outline: 1px solid var(--on-paper); }
+.tl.changed { border-bottom: 2px solid var(--on-paper); }
+.tl-in {
+  position: absolute; left: -3px; top: 0;
+  min-width: calc(100% + 6px); height: 100%;
+  padding: 0 3px;
+  white-space: pre;
+  color: var(--paper-ink);
+  background: var(--paper);
+  outline: 2px solid var(--on-paper);
+}
+
+/* highlighter and comment bubbles */
+.ed-layer.tool-hl { cursor: crosshair; touch-action: none; }
+.it-hl, .hl-ghost { background: var(--hc); mix-blend-mode: multiply; }
+.hl-ghost { position: absolute; pointer-events: none; }
+.it-hl.has-note::after {
+  content: ""; position: absolute; right: 0; top: 0;
+  border: 5px solid var(--paper-ink);
+  border-left-color: transparent; border-bottom-color: transparent;
+}
+.it-note svg { display: block; width: 100%; height: 100%; pointer-events: none; }
+.tip {
+  position: absolute; z-index: 3;
+  max-width: 280px; padding: 6px 10px;
+  font-size: 13px; line-height: 1.35;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px var(--sheet-shadow);
+  pointer-events: none;
+}
+.note-box {
+  position: absolute; left: 16px; bottom: 14px; z-index: 4;
+  display: flex; flex-direction: column; gap: 4px;
+  width: min(320px, calc(100% - 32px)); padding: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 6px 18px var(--sheet-shadow);
+}
+.note-box textarea { width: 100%; resize: vertical; }
+
 @media (max-width: 720px) {
   .sep { display: none; }
   .out { margin-left: 0; width: 100%; }
@@ -381,7 +448,7 @@ dialog p { margin: 0 0 12px; }
 
 <header class="wrap top">
   <h1>Unisci PDF</h1>
-  <p class="lede">Carica più PDF, anche protetti da password, metti le pagine nell'ordine che vuoi, aggiungi testi e firme e scarica un unico file. Tutto avviene nel browser: i tuoi PDF non vengono caricati da nessuna parte.</p>
+  <p class="lede">Carica più PDF, anche protetti da password, metti le pagine nell'ordine che vuoi, cambia il testo, aggiungi firme, evidenziazioni e note e scarica un unico file. Tutto avviene nel browser: i tuoi PDF non vengono caricati da nessuna parte.</p>
 </header>
 
 <div class="bar">
@@ -431,7 +498,7 @@ dialog p { margin: 0 0 12px; }
     </div>
   </div>
 
-  <p class="note" id="example-note" hidden>Queste pagine sono un esempio per provare: trascinale, ruotale, eliminale, oppure apri la matita per aggiungere un testo o una firma. Spariscono quando aggiungi il tuo primo PDF.</p>
+  <p class="note" id="example-note" hidden>Queste pagine sono un esempio per provare: trascinale, ruotale, eliminale, oppure apri la matita per cambiare il testo, firmare, evidenziare. Spariscono quando aggiungi il tuo primo PDF.</p>
 
   <div class="grid" id="grid" role="list" aria-label="Pagine del PDF finale, nell'ordine in cui verranno salvate"></div>
 
@@ -439,34 +506,33 @@ dialog p { margin: 0 0 12px; }
     <p><strong>Trascina qui altri PDF</strong> oppure <button type="button" class="link" id="pick-btn">scegli i file</button>. Le nuove pagine vanno in fondo.</p>
   </div>
 
-  <p class="hints">Trascina una miniatura per spostarla. La matita, o un doppio clic sulla pagina, apre la pagina per aggiungere testi e firme. Un clic seleziona la pagina, <kbd>Maiusc</kbd> + clic seleziona un intervallo, un clic sul nome di un file seleziona tutte le sue pagine. Se trascini una pagina selezionata, si spostano insieme tutte quelle selezionate. Da tastiera: <kbd>←</kbd> <kbd>→</kbd> per passare da una pagina all'altra, <kbd>Maiusc</kbd> + frecce per spostarla, <kbd>Invio</kbd> per modificarla, <kbd>R</kbd> per ruotarla, <kbd>Canc</kbd> per eliminarla, <kbd>Ctrl</kbd> + <kbd>Z</kbd> per annullare.</p>
+  <p class="hints">Trascina una miniatura per spostarla. La matita, o un doppio clic sulla pagina, apre la pagina per cambiare il testo che c'è, aggiungerne di nuovo, firmare, evidenziare e mettere note. Un clic seleziona la pagina, <kbd>Maiusc</kbd> + clic seleziona un intervallo, un clic sul nome di un file seleziona tutte le sue pagine. Se trascini una pagina selezionata, si spostano insieme tutte quelle selezionate. Da tastiera: <kbd>←</kbd> <kbd>→</kbd> per passare da una pagina all'altra, <kbd>Maiusc</kbd> + frecce per spostarla, <kbd>Invio</kbd> per modificarla, <kbd>R</kbd> per ruotarla, <kbd>Canc</kbd> per eliminarla, <kbd>Ctrl</kbd> + <kbd>Z</kbd> per annullare.</p>
 </main>
 
 <dialog class="editor" id="editor" aria-labelledby="ed-title">
   <div class="ed-bar">
     <span class="ed-title" id="ed-title">Modifica pagina</span>
+    <button type="button" class="btn tool" id="ed-edit" aria-pressed="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H8"/><path d="M16 4h-2a2 2 0 0 0-2 2"/><path d="M16 20h-2a2 2 0 0 1-2-2"/><path d="M9 12h6"/></svg>
+      Modifica testo
+    </button>
     <button type="button" class="btn" id="ed-text">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7V5h14v2"/><path d="M12 5v14"/><path d="M9 19h6"/></svg>
-      Testo
+      Aggiungi testo
     </button>
     <button type="button" class="btn" id="ed-sign">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 16c3-6 5-9 7-9s0 8 2 8 3-4 5-4 2 3 4 3"/><path d="M3 21h18"/></svg>
       Firma
     </button>
     <button type="button" class="btn" id="ed-newsig" hidden>Cambia firma</button>
-    <span class="sep" aria-hidden="true"></span>
-    <label for="ed-size">Dimensione</label>
-    <select class="field" id="ed-size">
-      <option value="8">8</option><option value="10">10</option><option value="12" selected>12</option>
-      <option value="14">14</option><option value="16">16</option><option value="18">18</option>
-      <option value="24">24</option><option value="36">36</option>
-    </select>
-    <div class="swatches" role="group" aria-label="Colore del testo">
-      <button type="button" class="sw" id="ed-col-black" data-color="#111111" style="--c:#111111" aria-label="Nero" aria-pressed="true"></button>
-      <button type="button" class="sw" id="ed-col-blue" data-color="#1a3fb0" style="--c:#1a3fb0" aria-label="Blu" aria-pressed="false"></button>
-      <button type="button" class="sw" id="ed-col-red" data-color="#c0201a" style="--c:#c0201a" aria-label="Rosso" aria-pressed="false"></button>
-    </div>
-    <button type="button" class="btn danger" id="ed-del" disabled>Elimina elemento</button>
+    <button type="button" class="btn tool" id="ed-hl" aria-pressed="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 4 6 6-9 9H7v-4z"/><path d="M4 21h7"/></svg>
+      Evidenzia
+    </button>
+    <button type="button" class="btn" id="ed-note-add">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11h-9l-5 4v-4H4z"/></svg>
+      Fumetto
+    </button>
     <div class="ed-nav">
       <button type="button" class="btn" id="ed-prev" aria-label="Pagina precedente">‹</button>
       <span class="ed-pos" id="ed-pos"></span>
@@ -474,13 +540,48 @@ dialog p { margin: 0 0 12px; }
       <button type="button" class="btn primary" id="ed-done">Fatto</button>
     </div>
   </div>
-  <div class="ed-stage" id="ed-stage">
-    <div class="ed-page" id="ed-page">
-      <canvas id="ed-canvas"></canvas>
-      <div class="ed-layer" id="ed-layer"></div>
+  <div class="ed-ctx">
+    <button type="button" class="btn danger" id="ed-del" disabled>Elimina elemento</button>
+    <div class="ctl" id="txt-ctl" hidden>
+      <label for="ed-size">Dimensione</label>
+      <select class="field" id="ed-size">
+        <option value="8">8</option><option value="10">10</option><option value="12" selected>12</option>
+        <option value="14">14</option><option value="16">16</option><option value="18">18</option>
+        <option value="24">24</option><option value="36">36</option>
+      </select>
+      <div class="swatches" role="group" aria-label="Colore del testo">
+        <button type="button" class="sw" id="ed-col-black" data-color="#111111" style="--c:#111111" aria-label="Nero" aria-pressed="true"></button>
+        <button type="button" class="sw" id="ed-col-blue" data-color="#1a3fb0" style="--c:#1a3fb0" aria-label="Blu" aria-pressed="false"></button>
+        <button type="button" class="sw" id="ed-col-red" data-color="#c0201a" style="--c:#c0201a" aria-label="Rosso" aria-pressed="false"></button>
+      </div>
+    </div>
+    <div class="ctl" id="hl-ctl" hidden>
+      <div class="swatches" role="group" aria-label="Colore dell'evidenziatore">
+        <button type="button" class="sw" id="hl-yellow" data-color="#ffe838" style="--c:#ffe838" aria-label="Giallo" title="Giallo" aria-pressed="true"></button>
+        <button type="button" class="sw" id="hl-green" data-color="#8ee66b" style="--c:#8ee66b" aria-label="Verde" title="Verde" aria-pressed="false"></button>
+        <button type="button" class="sw" id="hl-blue" data-color="#7fd6ff" style="--c:#7fd6ff" aria-label="Azzurro" title="Azzurro" aria-pressed="false"></button>
+        <button type="button" class="sw" id="hl-pink" data-color="#ff9ecb" style="--c:#ff9ecb" aria-label="Rosa" title="Rosa" aria-pressed="false"></button>
+        <button type="button" class="sw" id="hl-orange" data-color="#ffb14d" style="--c:#ffb14d" aria-label="Arancione" title="Arancione" aria-pressed="false"></button>
+        <button type="button" class="sw" id="hl-violet" data-color="#c9a4ff" style="--c:#c9a4ff" aria-label="Viola" title="Viola" aria-pressed="false"></button>
+        <button type="button" class="sw" id="hl-red" data-color="#ff8f85" style="--c:#ff8f85" aria-label="Rosso" title="Rosso" aria-pressed="false"></button>
+      </div>
+      <input type="color" class="sw-any" id="hl-custom" value="#ffe838" aria-label="Altro colore" title="Altro colore">
     </div>
   </div>
-  <p class="ed-hint">Doppio clic sulla pagina per scrivere in quel punto. Trascina testi e firme per spostarli; il pallino in basso a destra della firma la ridimensiona. Le modifiche entrano nel PDF che scarichi, i file originali non cambiano.</p>
+  <div class="ed-body">
+    <div class="ed-stage" id="ed-stage">
+      <div class="ed-page" id="ed-page">
+        <canvas id="ed-canvas"></canvas>
+        <div class="ed-layer" id="ed-layer"></div>
+        <div class="tip" id="ed-tip" hidden></div>
+      </div>
+    </div>
+    <div class="note-box" id="ed-note-box" hidden>
+      <label for="ed-note">Nota a comparsa</label>
+      <textarea class="field" id="ed-note" rows="3" placeholder="Compare quando passi il mouse sull'evidenziazione o sul fumetto"></textarea>
+    </div>
+  </div>
+  <p class="ed-hint" id="ed-hint" role="status"></p>
 </dialog>
 
 <dialog class="small" id="pad" aria-labelledby="pad-title">
@@ -635,6 +736,7 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
     x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>'
   };
   const THUMB_PX = 460;     // longest side of a rendered thumbnail
+  const NOTE_PT = 22;       // side of a comment bubble, in points
   const UNDO_MAX = 50;
   const LINE = 1.2;         // line height of added text, in em
   const FONT_STACK = 'Helvetica, Arial, "Liberation Sans", sans-serif';
@@ -710,7 +812,7 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
   async function openPdf(name, bytes, example) {
     const viewer = async (password) => {
       await workerReady;
-      return pdfjsLib.getDocument({ data: bytes.slice(), password, isEvalSupported: false }).promise;
+      return pdfjsLib.getDocument({ data: bytes.slice(), password, isEvalSupported: false, fontExtraProperties: true }).promise;
     };
     let lib = null, pdfjs = null;
     try {
@@ -751,7 +853,7 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
       try { pdfjs = await viewer(undefined); } catch (e) { pdfjs = null; }   // still mergeable, only previews are missing
     }
     const id = 'd' + (++docSeq);
-    const doc = { id, name, lib, pdfjs, pageCount, color: ((docSeq - 1) % 8) + 1, example: !!example, pending: true };
+    const doc = { id, name, lib, pdfjs, pageCount, color: ((docSeq - 1) % 8) + 1, example: !!example, pending: true, fonts: new Map(), text: new Map() };
     docs.set(id, doc);
     return doc;
   }
@@ -766,7 +868,7 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
   function pagesOf(doc) {
     const out = [];
     for (let k = 0; k < doc.pageCount; k++) {
-      out.push({ uid: 'p' + (++pageSeq), docId: doc.id, index: k, rot: 0, items: [], rev: 0 });
+      out.push({ uid: 'p' + (++pageSeq), docId: doc.id, index: k, rot: 0, items: [], edits: {}, rev: 0 });
     }
     return out;
   }
@@ -850,6 +952,606 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
     return [it.X + lx * c + ly * s, it.Y + lx * s - ly * c];
   }
 
+  // ---- existing text: reading and rewriting the page content ---------------
+  // The text already on a page is changed inside the page's content stream. The operators that
+  // draw a line are replaced by moves that keep every later position where it was, and the new
+  // line is drawn in their place with the document's own font wherever that font has the
+  // characters. PDF.js decodes the fonts; the edit is refused when its reading of the page and
+  // this parser's reading disagree, so a page is never rewritten on a guess.
+  const { PDFName, PDFArray, PDFRawStream, PDFHexString, PDFString, decodePDFRawStream } = window.PDFLib;
+  const ID = [1, 0, 0, 1, 0, 0];
+  const mul = (a, b) => [
+    a[0] * b[0] + a[1] * b[2], a[0] * b[1] + a[1] * b[3],
+    a[2] * b[0] + a[3] * b[2], a[2] * b[1] + a[3] * b[3],
+    a[4] * b[0] + a[5] * b[2] + b[4], a[4] * b[1] + a[5] * b[3] + b[5]
+  ];
+  const inv = (m) => {
+    const d = m[0] * m[3] - m[1] * m[2];
+    return [m[3] / d, -m[1] / d, -m[2] / d, m[0] / d, (m[2] * m[5] - m[3] * m[4]) / d, (m[1] * m[4] - m[0] * m[5]) / d];
+  };
+  const at = (m, x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
+  const fmt = (v) => {
+    const s = (Math.round(v * 1e4) / 1e4).toString();
+    return /e/i.test(s) ? '0' : s;
+  };
+  const hasEdits = (p) => Object.keys(p.edits).length > 0;
+
+  function contentBytes(lib, index) {
+    const c = lib.getPage(index).node.Contents();
+    const streams = [];
+    if (c instanceof PDFArray) { for (let i = 0; i < c.size(); i++) streams.push(c.lookup(i)); }
+    else if (c) streams.push(c);
+    const chunks = [];
+    let total = 0;
+    for (const s of streams) {
+      let data;
+      if (s instanceof PDFRawStream) data = decodePDFRawStream(s).decode();
+      else if (s && typeof s.getUnencodedContents === 'function') data = s.getUnencodedContents();
+      else throw new Error('stream');
+      chunks.push(data);
+      total += data.length + 1;
+    }
+    const out = new Uint8Array(total);
+    let pos = 0;
+    for (const d of chunks) { out.set(d, pos); pos += d.length; out[pos++] = 10; }
+    return out;
+  }
+
+  // Splits a content stream into operators, remembering the bytes each one occupies.
+  function parseOps(b) {
+    const n = b.length, ops = [];
+    let i = 0;
+    const ws = (c) => c === 32 || c === 10 || c === 13 || c === 9 || c === 12 || c === 0;
+    const delim = (c) => c === 40 || c === 41 || c === 60 || c === 62 || c === 91 || c === 93 || c === 123 || c === 125 || c === 47 || c === 37;
+    const hexv = (c) => (c >= 48 && c <= 57 ? c - 48 : c >= 65 && c <= 70 ? c - 55 : c >= 97 && c <= 102 ? c - 87 : -1);
+    const latin = (s, e) => { let r = ''; for (let k = s; k < e; k++) r += String.fromCharCode(b[k]); return r; };
+    function skip() {
+      for (;;) {
+        while (i < n && ws(b[i])) i++;
+        if (i < n && b[i] === 37) { while (i < n && b[i] !== 10 && b[i] !== 13) i++; } else return;
+      }
+    }
+    function token() {
+      const c = b[i];
+      if (c === 40) {                       // (literal string)
+        i++;
+        const s = [];
+        let depth = 1;
+        while (i < n) {
+          let ch = b[i++];
+          if (ch === 92) {
+            if (i >= n) break;
+            ch = b[i++];
+            if (ch === 110) s.push(10); else if (ch === 114) s.push(13); else if (ch === 116) s.push(9);
+            else if (ch === 98) s.push(8); else if (ch === 102) s.push(12);
+            else if (ch >= 48 && ch <= 55) {
+              let v = ch - 48;
+              for (let k = 0; k < 2 && i < n && b[i] >= 48 && b[i] <= 55; k++) v = v * 8 + (b[i++] - 48);
+              s.push(v & 255);
+            } else if (ch === 13) { if (b[i] === 10) i++; } else if (ch !== 10) s.push(ch);
+          } else if (ch === 40) { depth++; s.push(ch); }
+          else if (ch === 41) { if (--depth === 0) break; s.push(ch); }
+          else if (ch === 13) { if (b[i] === 10) i++; s.push(10); }
+          else s.push(ch);
+        }
+        return { s };
+      }
+      if (c === 60) {
+        if (b[i + 1] === 60) {              // << dictionary >>
+          i += 2;
+          for (;;) {
+            skip();
+            if (i >= n) break;
+            if (b[i] === 62 && b[i + 1] === 62) { i += 2; break; }
+            token();
+          }
+          return { dict: 1 };
+        }
+        i++;                                // <hex string>
+        const s = [];
+        let hi = -1;
+        while (i < n && b[i] !== 62) {
+          const v = hexv(b[i++]);
+          if (v < 0) continue;
+          if (hi < 0) hi = v; else { s.push(hi * 16 + v); hi = -1; }
+        }
+        i++;
+        if (hi >= 0) s.push(hi * 16);
+        return { s };
+      }
+      if (c === 91) {                       // [array]
+        i++;
+        const arr = [];
+        for (;;) {
+          skip();
+          if (i >= n) break;
+          if (b[i] === 93) { i++; break; }
+          arr.push(token());
+        }
+        return { arr };
+      }
+      if (c === 47) {                       // /Name
+        i++;
+        const s = i;
+        while (i < n && !ws(b[i]) && !delim(b[i])) i++;
+        const raw = latin(s, i);
+        return { name: raw.replace(/#([0-9a-fA-F]{2})/g, (m, h) => String.fromCharCode(parseInt(h, 16))), raw: '/' + raw };
+      }
+      if (delim(c)) { i++; return { junk: 1 }; }
+      const s = i;
+      while (i < n && !ws(b[i]) && !delim(b[i])) i++;
+      const w = latin(s, i);
+      if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(w)) return { n: parseFloat(w) };
+      if (w === 'true' || w === 'false' || w === 'null') return { kw: w };
+      return { op: w };
+    }
+    let args = [], first = -1;
+    for (;;) {
+      skip();
+      if (i >= n) break;
+      const s = i, t = token();
+      if (t.op === undefined) {
+        if (first < 0) first = s;
+        args.push(t);
+        continue;
+      }
+      if (t.op === 'BI') {                  // inline image: skip its dictionary and its binary data
+        for (;;) { skip(); if (i >= n) break; if (token().op === 'ID') break; }
+        let stop = n;
+        for (let j = i + 1; j + 1 < n; j++) {
+          if (b[j] !== 69 || b[j + 1] !== 73 || !ws(b[j - 1]) || (j + 2 < n && !ws(b[j + 2]))) continue;
+          let plain = true;
+          for (let q = j + 2; q < Math.min(n, j + 14); q++) if (b[q] > 126 || (b[q] < 32 && !ws(b[q]))) { plain = false; break; }
+          if (plain) { stop = j + 2; break; }
+        }
+        i = stop;
+      } else {
+        ops.push({ op: t.op, a: args, start: first < 0 ? s : first, end: i });
+      }
+      args = [];
+      first = -1;
+    }
+    return ops;
+  }
+
+  // The text-showing operators of the page itself (not of forms or annotations), as PDF.js decoded them.
+  function decodedShows(list) {
+    const O = pdfjsLib.OPS, out = [], saved = [];
+    let depth = 0, font = null;
+    for (let i = 0; i < list.fnArray.length; i++) {
+      const fn = list.fnArray[i], a = list.argsArray[i];
+      if (fn === O.paintFormXObjectBegin || fn === O.beginAnnotation) depth++;
+      else if (fn === O.paintFormXObjectEnd || fn === O.endAnnotation) depth--;
+      else if (depth === 0) {
+        if (fn === O.save) saved.push(font);
+        else if (fn === O.restore) { if (saved.length) font = saved.pop(); }
+        else if (fn === O.setFont) font = a[0];
+        else if (fn === O.setGState) { for (const kv of a[0]) if (kv[0] === 'Font') font = kv[1][0]; }
+        else if (fn === O.showText) out.push({ glyphs: a[0], font });
+      }
+    }
+    return out;
+  }
+  function fontObject(page, name) {
+    return new Promise((resolve) => {
+      let done = false;
+      const end = (f) => { if (!done) { done = true; clearTimeout(timer); resolve(f); } };
+      const timer = setTimeout(() => end(null), 5000);
+      try { page.commonObjs.get(name, end); } catch (e) { end(null); }
+    });
+  }
+  function pickStd(name, f) {
+    const n = (name || '').toLowerCase();
+    const mono = !!f.isMonospace || /courier|mono|consol|typewriter|cmtt/.test(n);
+    const serif = !mono && !/sans/.test(n) &&
+      (!!f.isSerifFont || /times|serif|georgia|garamond|cambria|caladea|palatino|bookman|century|minion|roman|cmr\d/.test(n));
+    const bold = !!f.bold || !!f.black || /bold|black|heavy|demi/.test(n);
+    const ital = !!f.italic || /italic|oblique/.test(n);
+    if (mono) return 'Courier' + (bold ? (ital ? 'BoldOblique' : 'Bold') : ital ? 'Oblique' : '');
+    if (serif) return 'TimesRoman' + (bold ? (ital ? 'BoldItalic' : 'Bold') : ital ? 'Italic' : '');
+    return 'Helvetica' + (bold ? (ital ? 'BoldOblique' : 'Bold') : ital ? 'Oblique' : '');
+  }
+  const printable = (u) => !!u && !/[\u0000-\u001f\u007f\ue000-\uf8ff\ufffd]/.test(u);
+  function harvest(info, g) {
+    if (g.isInFont === false || !printable(g.unicode) || Array.from(g.unicode).length !== 1) return;
+    if (!info.map.has(g.unicode)) info.map.set(g.unicode, { code: g.originalCharCode, w: g.width || 0, sp: !!g.isSpace });
+  }
+  function fontInfo(doc, loaded, f) {
+    let info = doc.fonts.get(loaded);
+    if (info) return info;
+    const name = (f && f.name) || '';
+    const asc = f ? f.ascent : 0, desc = f ? f.descent : 0;
+    info = {
+      name, ok: !!f && !f.vertical, codeLen: 0, map: new Map(),
+      fm0: f && f.fontMatrix && f.fontMatrix[0] > 0 ? f.fontMatrix[0] : 0.001,
+      std: pickStd(name, f || {}),
+      asc: asc > 0.4 && asc < 1.3 ? asc : 0.82,
+      desc: desc < -0.02 && desc > -0.6 ? desc : -0.2
+    };
+    // A font that is not embedded is drawn by the reader with a complete font: every character it encodes exists.
+    if (f && f.missingFile && !f.composite && f.toUnicode && f.widths) {
+      const tu = f.toUnicode;
+      for (let code = 32; code < 256; code++) {
+        const u = tu._map ? tu._map[code] : (code >= tu.firstChar && code <= tu.lastChar ? String.fromCharCode(code) : undefined);
+        const w = f.widths[code];
+        if (typeof u === 'string' && printable(u) && Array.from(u).length === 1 && w > 0 && !info.map.has(u)) {
+          info.map.set(u, { code, w, sp: code === 32 });
+        }
+      }
+      info.codeLen = 1;
+    }
+    doc.fonts.set(loaded, info);
+    return info;
+  }
+
+  function analyzePage(doc, index) {
+    if (!doc.text.has(index)) {
+      doc.text.set(index, readPageText(doc, index).catch(() => ({ ok: false, groups: [], byId: new Map() })));
+    }
+    return doc.text.get(index);
+  }
+  async function readPageText(doc, index) {
+    if (!doc.pdfjs) throw new Error('preview');
+    const bytes = contentBytes(doc.lib, index);
+    const ops = parseOps(bytes);
+    const page = await doc.pdfjs.getPage(index + 1);
+    const shows = decodedShows(await page.getOperatorList({ annotationMode: pdfjsLib.AnnotationMode.DISABLE }));
+    const infos = new Map();
+    for (const name of new Set(shows.map((s) => s.font))) {
+      infos.set(name, fontInfo(doc, name, name ? await fontObject(page, name) : null));
+    }
+
+    let st = { ctm: ID, font: null, raw: '', fs: 0, tc: 0, tw: 0, th: 1, tl: 0, rise: 0, tr: 0, epoch: 0 };
+    const stack = [], list = [], resFont = new Map(), fontNames = new Set();
+    let tlm = ID, tx = 0, k = 0, epoch = 0;
+    const num = (a, j) => (a[j] && typeof a[j].n === 'number' ? a[j].n : NaN);
+    const nums = (a, c) => { const r = []; for (let j = 0; j < c; j++) r.push(num(a, j)); return r; };
+    const nextLine = () => { tlm = mul([1, 0, 0, 1, 0, -st.tl], tlm); tx = 0; };
+
+    const show = (o, parts, pre) => {
+      if (!st.font) return;                               // nothing is drawn without a font
+      const ref = shows[k++];
+      if (!ref) throw new Error('count');
+      const known = resFont.get(st.font);
+      if (known === undefined) resFont.set(st.font, ref.font); else if (known !== ref.font) throw new Error('font');
+      const info = infos.get(ref.font);
+      const glyphs = ref.glyphs.filter((g) => typeof g !== 'number');
+      let nbytes = 0;
+      for (const p of parts) if (p && p.s) nbytes += p.s.length;
+      const len = glyphs.length ? nbytes / glyphs.length : 0;
+      if (glyphs.length) {
+        if (len !== 1 && len !== 2) throw new Error('codes');
+        let gi = 0;
+        for (const p of parts) {
+          if (!p || !p.s) continue;
+          for (let j = 0; j < p.s.length; j += len) {
+            const code = len === 1 ? p.s[j] : p.s[j] * 256 + p.s[j + 1];
+            if (glyphs[gi++].originalCharCode !== code) throw new Error('codes');
+          }
+        }
+        if (!info.codeLen) info.codeLen = len; else if (info.codeLen !== len) info.ok = false;
+      }
+      const fs = st.fs, sc = fs * info.fm0, ents = [];
+      let x = 0, gend = 0;
+      for (const el of ref.glyphs) {
+        if (typeof el === 'number') { x -= el * fs / 1000; continue; }
+        const w = el.width || 0, a = w * sc + st.tc + (el.isSpace ? st.tw : 0);
+        ents.push({ u: printable(el.unicode) ? el.unicode : '□', code: el.originalCharCode, w, sp: !!el.isSpace, x: x * st.th, adv: a * st.th });
+        harvest(info, el);
+        x += a;
+        gend = x * st.th;
+      }
+      const adv = x * st.th, M = mul(tlm, st.ctm);
+      const usable = info.ok && fs > 0 && st.th > 0 && st.tr >= 0 && st.tr <= 2 &&
+        [fs, st.tc, st.tw, st.th, st.rise, adv, tx].concat(M).every(Number.isFinite) &&
+        Math.abs(M[0] * M[3] - M[1] * M[2]) > 1e-12;
+      list.push({
+        k: list.length, start: o.start, end: o.end, pre, font: ref.font, info, raw: st.raw,
+        fs, tc: st.tc, tw: st.tw, th: st.th, rise: st.rise, tr: st.tr, epoch: st.epoch, M, tx, adv, gend, ents, usable
+      });
+      if (Number.isFinite(adv)) tx += adv;
+    };
+
+    for (const o of ops) {
+      const a = o.a;
+      switch (o.op) {
+        case 'q': stack.push(Object.assign({}, st)); break;
+        case 'Q': if (stack.length) st = stack.pop(); break;
+        case 'cm': { const m = nums(a, 6); if (m.every(Number.isFinite)) st.ctm = mul(m, st.ctm); break; }
+        case 'BT': tlm = ID; tx = 0; break;
+        case 'Tf': if (a[0] && a[0].name !== undefined) { st.font = a[0].name; st.raw = a[0].raw; st.fs = num(a, 1); fontNames.add(a[0].name); } break;
+        case 'Tc': st.tc = num(a, 0); break;
+        case 'Tw': st.tw = num(a, 0); break;
+        case 'Tz': st.th = num(a, 0) / 100; break;
+        case 'TL': st.tl = num(a, 0); break;
+        case 'Ts': st.rise = num(a, 0); break;
+        case 'Tr': st.tr = num(a, 0); break;
+        case 'Td': tlm = mul([1, 0, 0, 1, num(a, 0), num(a, 1)], tlm); tx = 0; break;
+        case 'TD': st.tl = -num(a, 1); tlm = mul([1, 0, 0, 1, num(a, 0), num(a, 1)], tlm); tx = 0; break;
+        case 'Tm': tlm = nums(a, 6); tx = 0; break;
+        case 'T*': nextLine(); break;
+        case 'Tj': show(o, [a[0]], ''); break;
+        case 'TJ': show(o, a[0] && a[0].arr ? a[0].arr : [], ''); break;
+        case '\'': nextLine(); show(o, [a[0]], 'T* '); break;
+        case '"': st.tw = num(a, 0); st.tc = num(a, 1); nextLine(); show(o, [a[2]], fmt(st.tw) + ' Tw ' + fmt(st.tc) + ' Tc T* '); break;
+        case 'g': case 'rg': case 'k': case 'sc': case 'scn': case 'cs': case 'gs': st.epoch = ++epoch; break;
+        default: break;
+      }
+    }
+    if (k !== shows.length) throw new Error('count');
+
+    // Lines: runs of operators that continue each other on one baseline with one font and color.
+    const groups = [];
+    let g = null;
+    for (const op of list) {
+      if (!op.ents.length) continue;
+      if (!op.usable) { g = null; continue; }
+      let off = 0, joins = false;
+      if (g && g.font === op.font && g.fs === op.fs && g.th === op.th && g.rise === op.rise && g.tr === op.tr && g.epoch === op.epoch) {
+        const lin = Math.abs(g.M[0]) + Math.abs(g.M[1]) + Math.abs(g.M[2]) + Math.abs(g.M[3]);
+        const diff = Math.abs(g.M[0] - op.M[0]) + Math.abs(g.M[1] - op.M[1]) + Math.abs(g.M[2] - op.M[2]) + Math.abs(g.M[3] - op.M[3]);
+        if (diff <= 1e-4 * lin) {
+          const u = at(op.M, op.tx, 0), p = at(g.inv, u[0], u[1]);
+          off = p[0] - g.tx0;
+          const gap = off - g.end, em = g.fs * g.th;
+          joins = Math.abs(p[1]) <= 0.03 * g.fs && gap > -0.25 * em && gap < 1.5 * em;
+        }
+      }
+      if (joins) {
+        for (const e of op.ents) g.ents.push(Object.assign({}, e, { x: e.x + off }));
+        g.end = off + op.gend;
+        g.ops.push(op);
+      } else {
+        g = {
+          id: op.k, ops: [op], font: op.font, info: op.info, raw: op.raw, fs: op.fs, tc: op.tc, tw: op.tw, th: op.th,
+          rise: op.rise, tr: op.tr, epoch: op.epoch, M: op.M, inv: inv(op.M), tx0: op.tx,
+          ents: op.ents.map((e) => Object.assign({}, e)), end: op.gend, prev: null, next: null
+        };
+        groups.push(g);
+      }
+    }
+    const lines = [];
+    for (const gr of groups) {
+      gr.list = [];
+      let prevEnd = null, prevU = ' ';
+      for (const e of gr.ents) {
+        // a visible gap with no space character in it reads as a space
+        if (prevEnd !== null && e.x - prevEnd > 0.17 * gr.fs * gr.th && prevU !== ' ' && e.u !== ' ') {
+          gr.list.push({ syn: true, u: ' ', x: prevEnd, w: e.x - prevEnd });
+        }
+        gr.list.push(e);
+        prevEnd = e.x + e.adv;
+        prevU = e.u;
+      }
+      gr.text = gr.list.map((e) => e.u).join('');
+      gr.width = gr.end;
+      gr.o = at(gr.M, gr.tx0, 0);
+      gr.lenx = Math.hypot(gr.M[0], gr.M[1]);
+      gr.leny = Math.hypot(gr.M[2], gr.M[3]);
+      if (gr.text.trim() && gr.lenx > 0 && gr.leny > 0) lines.push(gr);
+    }
+    // What follows a line on the same baseline moves with it when the line gets longer or shorter.
+    if (lines.length <= 2500) {
+      for (const b of lines) {
+        const db = [b.M[0] / b.lenx, b.M[1] / b.lenx];
+        let best = null, bestGap = Infinity;
+        for (const a of lines) {
+          if (a === b || a.next || a.prev === b) continue;
+          const d = [a.M[0] / a.lenx, a.M[1] / a.lenx];
+          if (d[0] * db[0] + d[1] * db[1] < 0.999) continue;
+          const ex = a.o[0] + a.M[0] * a.width, ey = a.o[1] + a.M[1] * a.width;
+          const vx = b.o[0] - ex, vy = b.o[1] - ey, em = a.fs * a.leny;
+          const along = vx * d[0] + vy * d[1], across = Math.abs(vx * d[1] - vy * d[0]);
+          if (across < 0.2 * em && along > -0.2 * em && along < 0.7 * em && along < bestGap) { best = a; bestGap = along; }
+        }
+        if (best) { b.prev = best; best.next = b; }
+      }
+    }
+    // A number standing on its own (a table cell, a total) is kept flush right when it changes.
+    for (const b of lines) {
+      b.num = !b.prev && !b.next && /\d/.test(b.text) && /^[\s\d.,'’%€$£+\-−–()\/:]+$/.test(b.text);
+    }
+    return { ok: true, bytes, groups: lines, byId: new Map(lines.map((x) => [x.id, x])), fontNames };
+  }
+
+  // Looks through the other pages of a document for characters its fonts contain,
+  // so a corrected line can use them even when they are not on the page being edited.
+  async function gatherFonts(doc) {
+    if (doc.gathered || !doc.pdfjs) return;
+    doc.gathered = true;
+    for (let i = 0; i < Math.min(doc.pageCount, 60); i++) {
+      if (!docs.has(doc.id)) return;
+      try {
+        const page = await doc.pdfjs.getPage(i + 1);
+        const shows = decodedShows(await page.getOperatorList({ annotationMode: pdfjsLib.AnnotationMode.DISABLE }));
+        for (const s of shows) {
+          if (!s.font) continue;
+          const info = doc.fonts.get(s.font) || fontInfo(doc, s.font, await fontObject(page, s.font));
+          for (const el of s.glyphs) if (typeof el !== 'number') harvest(info, el);
+        }
+      } catch (e) { /* a page that cannot be read adds nothing */ }
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  }
+
+  // Standard fonts stand in for characters the document's own font does not have.
+  const stdFonts = new Map();
+  let stdDoc = null;
+  async function prepStd(name) {
+    if (stdFonts.has(name)) return;
+    if (!stdDoc) stdDoc = await PDFDocument.create();
+    const f = await stdDoc.embedFont(StandardFonts[name]);
+    const seen = new Map();
+    stdFonts.set(name, (ch) => {
+      if (!seen.has(ch)) {
+        let v = null;
+        try { v = { hex: f.encodeText(ch).toString().slice(1, -1), w: f.widthOfTextAtSize(ch, 1) }; } catch (e) { v = null; }
+        seen.set(ch, v);
+      }
+      return seen.get(ch);
+    });
+  }
+  async function prepStdFor(an, edits) {
+    for (const id of Object.keys(edits)) {
+      const g = an.byId.get(Number(id));
+      if (g) await prepStd(g.info.std);
+    }
+  }
+
+  // Places the characters of a line. Without new text it is the line as it stands. With new text,
+  // what did not change at the start and at the end keeps its exact spacing; only the part in
+  // between is set again, and the end follows it.
+  function layout(g, text) {
+    const sc = g.fs * g.info.fm0, th = g.th, L = g.list;
+    const nat = (w, sp) => (w * sc + g.tc + (sp ? g.tw : 0)) * th;
+    const seq = [];
+    const keep = (e, dx) => { if (!e.syn) seq.push({ x: e.x + dx, code: e.code, n: nat(e.w, e.sp) }); };
+    if (text === undefined || text === g.text) {
+      for (const e of L) keep(e, 0);
+      return { seq, width: g.width, std: 0, dropped: 0, clean: g.text };
+    }
+    let P = 0, pos = 0;
+    while (P < L.length && text.startsWith(L[P].u, pos)) { pos += L[P].u.length; P++; }
+    let S = 0, end = text.length;
+    while (S < L.length - P) {
+      const u = L[L.length - 1 - S].u;
+      if (end - u.length < pos || !text.endsWith(u, end)) break;
+      end -= u.length;
+      S++;
+    }
+    for (let i = 0; i < P; i++) keep(L[i], 0);
+    let cur = P < L.length ? L[P].x : g.width, std = 0, dropped = 0, kept = '';
+    const sub = stdFonts.get(g.info.std), fsS = g.fs;
+    for (const ch of text.slice(pos, end)) {
+      const m = g.info.map.get(ch);
+      if (m) {
+        const n = nat(m.w, m.sp);
+        seq.push({ x: cur, code: m.code, n });
+        cur += n;
+        kept += ch;
+      } else if (ch === ' ') {
+        cur += (0.28 * fsS + g.tc) * th;
+        kept += ch;
+      } else {
+        const s = sub ? sub(ch) : null;
+        if (!s) { dropped++; continue; }
+        const n = (s.w * fsS + g.tc) * th;
+        seq.push({ x: cur, std: s.hex, n });
+        cur += n;
+        std++;
+        kept += ch;
+      }
+    }
+    let width = cur;
+    if (S > 0) {
+      const dx = cur - L[L.length - S].x;
+      for (let i = L.length - S; i < L.length; i++) keep(L[i], dx);
+      width = g.width + dx;
+    }
+    return { seq, width, std, dropped, clean: text.slice(0, pos) + kept + text.slice(end) };
+  }
+
+  function planEdits(an, edits) {
+    const lays = new Map();
+    for (const id of Object.keys(edits)) {
+      const g = an.byId.get(Number(id));
+      if (g && edits[id] !== g.text) lays.set(g, layout(g, edits[id]));
+    }
+    const memo = new Map();
+    const pushed = (g, depth) => {                  // in page units, along the baseline
+      if (!g.prev || depth > 500) return 0;
+      if (memo.has(g)) return memo.get(g);
+      memo.set(g, 0);
+      const p = g.prev;
+      const v = pushed(p, depth + 1) + (lays.has(p) ? (lays.get(p).width - p.width) * p.lenx : 0);
+      memo.set(g, v);
+      return v;
+    };
+    return { lays, shift: (g) => pushed(g, 0) / g.lenx - (g.num && lays.has(g) ? lays.get(g).width - g.width : 0) };
+  }
+
+  function drawLine(g, lay, shift, subKey) {
+    const k = 1000 / (g.fs * g.th);
+    const hex = (code) => code.toString(16).padStart(g.info.codeLen * 2, '0');
+    let out = '', arr = '', cur = 0, sub = false;
+    const flush = () => { if (arr) { out += '[' + arr + '] TJ\n'; arr = ''; } };
+    for (const it of lay.seq) {
+      const wantSub = !!it.std;
+      if (wantSub !== sub) {
+        flush();
+        out += (wantSub ? '/' + subKey : g.raw) + ' ' + fmt(g.fs) + ' Tf\n';
+        sub = wantSub;
+      }
+      const d = it.x + shift - cur;
+      if (Math.abs(d) > 1e-5 * g.fs) arr += fmt(-d * k) + ' ';
+      arr += '<' + (it.std || hex(it.code)) + '> ';
+      cur = it.x + shift + it.n;
+    }
+    flush();
+    if (sub) out += g.raw + ' ' + fmt(g.fs) + ' Tf\n';
+    if (Math.abs(cur) > 1e-9) out += '[' + fmt(cur * k) + '] TJ\n';     // back to where the line started
+    return out;
+  }
+
+  function rewriteContent(an, edits) {
+    const plan = planEdits(an, edits), reps = [], std = new Map();
+    for (const g of an.groups) {
+      const shift = plan.shift(g), edited = plan.lays.get(g);
+      if (!edited && Math.abs(shift) < 1e-6 * g.fs) continue;
+      const lay = edited || layout(g);
+      let key = '';
+      if (lay.seq.some((it) => it.std)) {
+        key = 'UPdf' + g.info.std;
+        while (an.fontNames.has(key)) key += 'x';
+        std.set(key, g.info.std);
+      }
+      const body = drawLine(g, lay, shift, key);
+      g.ops.forEach((op, i) => {
+        const still = Math.abs(op.adv) > 1e-9 ? '[' + fmt(-op.adv * 1000 / (op.fs * op.th)) + '] TJ' : '';
+        reps.push({ start: op.start, end: op.end, text: '\n' + op.pre + (i ? '' : body) + still + '\n' });
+      });
+    }
+    if (!reps.length) return null;
+    reps.sort((a, b) => a.start - b.start);
+    const enc = new TextEncoder(), parts = [];
+    let from = 0, total = 0;
+    for (const r of reps) {
+      parts.push(an.bytes.subarray(from, r.start), enc.encode(r.text));
+      from = r.end;
+    }
+    parts.push(an.bytes.subarray(from));
+    for (const p of parts) total += p.length;
+    const bytes = new Uint8Array(total);
+    let pos = 0;
+    for (const p of parts) { bytes.set(p, pos); pos += p.length; }
+    return { bytes, std };
+  }
+
+  async function applyEdits(out, page, p, res) {
+    const an = await analyzePage(docs.get(p.docId), p.index);
+    if (!an.ok) return;
+    await prepStdFor(an, p.edits);
+    const made = rewriteContent(an, p.edits);
+    if (!made) return;
+    page.node.set(PDFName.of('Contents'), out.context.register(out.context.flateStream(made.bytes)));
+    for (const [key, name] of made.std) {
+      let f = res.std.get(name);
+      if (!f) { f = await out.embedFont(StandardFonts[name]); res.std.set(name, f); }
+      page.node.setFontDictionary(PDFName.of(key), f.ref);
+    }
+  }
+
+  // One page as a PDF of its own, with its edits: what previews are drawn from.
+  async function pagePdf(p) {
+    const one = await PDFDocument.create();
+    const copy = (await one.copyPages(docs.get(p.docId).lib, [p.index]))[0];
+    one.addPage(copy);
+    const res = makeRes();
+    if (hasEdits(p)) await applyEdits(one, copy, p, res);
+    if (p.items.length) await applyItems(one, copy, p.items, res);
+    return one.save();
+  }
+
   // ---- drawing the added items into a PDF page ---------------------------
   function dataUrlBytes(url) {
     const bin = atob(url.slice(url.indexOf(',') + 1));
@@ -873,7 +1575,7 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
     lines.forEach((l, i) => cx.fillText(l, 0, (i * LINE + BASELINE) * px));
     return { png: dataUrlBytes(cv.toDataURL('image/png')), w: cv.width / k, h: cv.height / k };
   }
-  const makeRes = () => ({ font: null, charset: null, images: new Map() });
+  const makeRes = () => ({ font: null, charset: null, images: new Map(), std: new Map() });
 
   async function applyItems(out, page, items, res) {
     const ctx = out.context;
@@ -898,12 +1600,53 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
           const at = localToPdf(it, 0, r.h);
           page.drawImage(await out.embedPng(r.png), { x: at[0], y: at[1], width: r.w, height: r.h, rotate: degrees(it.ang) });
         }
-      } else {
+      } else if (it.type === 'img') {
         let img = res.images.get(it.sig);
         if (!img) { img = await out.embedPng(it.sig.png); res.images.set(it.sig, img); }
         const at = localToPdf(it, 0, it.h);
         page.drawImage(img, { x: at[0], y: at[1], width: it.w, height: it.h, rotate: degrees(it.ang) });
+      } else if (it.type === 'hl' || it.note.trim()) {
+        addMark(out, page, it);
       }
+    }
+  }
+
+  // Highlights and comment bubbles are real PDF annotations: any reader shows their note on hover.
+  function addMark(out, page, it) {
+    const ctx = out.context, hl = it.type === 'hl';
+    const w = hl ? it.w : NOTE_PT, h = hl ? it.h : NOTE_PT;
+    const q = [[0, 0], [w, 0], [0, h], [w, h]].map((c) => localToPdf(it, c[0], c[1]));   // as seen upright: top left, top right, bottom left, bottom right
+    const xs = q.map((c) => c[0]), ys = q.map((c) => c[1]);
+    const rect = [Math.min.apply(null, xs), Math.min.apply(null, ys), Math.max.apply(null, xs), Math.max.apply(null, ys)];
+    const n = parseInt(it.color.slice(1), 16);
+    const col = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => Math.round(v / 255 * 1000) / 1000);
+    const pt = (c) => fmt(c[0]) + ' ' + fmt(c[1]);
+    let ap;
+    if (hl) {
+      ap = ctx.stream('/G gs ' + col.join(' ') + ' rg ' + pt(q[0]) + ' m ' + pt(q[1]) + ' l ' + pt(q[3]) + ' l ' + pt(q[2]) + ' l h f',
+        { Type: 'XObject', Subtype: 'Form', FormType: 1, BBox: rect, Resources: { ExtGState: { G: { Type: 'ExtGState', BM: 'Multiply' } } } });
+    } else {
+      const a = it.ang * Math.PI / 180, c = Math.round(Math.cos(a)), s = Math.round(Math.sin(a));
+      ap = ctx.stream(col.join(' ') + ' rg 0.2 0.2 0.2 RG 1 w 1 j 1.5 5.5 m 1.5 18.5 l 18.5 18.5 l 18.5 5.5 l 9 5.5 l 5 1.5 l 5 5.5 l h B ' +
+        '0.2 0.2 0.2 rg 5 13.8 10 1.2 re 5 10.2 10 1.2 re f',
+        { Type: 'XObject', Subtype: 'Form', FormType: 1, BBox: [0, 0, 20, 20], Matrix: [c, s, -s, c, 0, 0] });
+    }
+    const ref = ctx.nextRef(), note = it.note.trim();
+    const d = {
+      Type: 'Annot', Subtype: hl ? 'Highlight' : 'Text', Rect: rect, C: col, F: 4, P: page.ref,
+      M: PDFString.fromDate(new Date()), AP: { N: ctx.register(ap) }
+    };
+    if (hl) d.QuadPoints = [].concat.apply([], q); else { d.Name = 'Comment'; d.Open = false; }
+    if (note) d.Contents = PDFHexString.fromText(note);
+    const annot = ctx.obj(d);
+    ctx.assign(ref, annot);
+    page.node.addAnnot(ref);
+    if (note) {
+      const pop = ctx.register(ctx.obj({
+        Type: 'Annot', Subtype: 'Popup', Rect: [rect[2] + 6, rect[3] - 120, rect[2] + 206, rect[3]], Parent: ref, Open: false
+      }));
+      annot.set(PDFName.of('Popup'), pop);
+      page.node.addAnnot(pop);
     }
   }
 
@@ -943,13 +1686,9 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
     let temp = null;
     try {
       let page;
-      if (p.items.length) {
+      if (p.items.length || hasEdits(p)) {
         // an edited page is previewed from the very bytes that will be saved
-        const one = await PDFDocument.create();
-        const copy = (await one.copyPages(doc.lib, [p.index]))[0];
-        one.addPage(copy);
-        await applyItems(one, copy, p.items, makeRes());
-        temp = await pdfjsLib.getDocument({ data: await one.save(), isEvalSupported: false }).promise;
+        temp = await pdfjsLib.getDocument({ data: await pagePdf(p), isEvalSupported: false }).promise;
         page = await temp.getPage(1);
       } else {
         page = await doc.pdfjs.getPage(p.index + 1);
@@ -997,7 +1736,7 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
       '<div class="well"><div class="ph"></div><img alt="" hidden draggable="false">' +
       '<div class="nop" hidden>Anteprima non disponibile</div><span class="mark" hidden>modificata</span></div>' +
       '<div class="row"><span class="pos"></span>' +
-      '<button type="button" class="act" id="edit-' + p.uid + '" data-act="edit" title="Aggiungi testi e firme" aria-label="Aggiungi testi e firme">' + ICON.edit + '</button>' +
+      '<button type="button" class="act" id="edit-' + p.uid + '" data-act="edit" title="Modifica la pagina" aria-label="Modifica la pagina">' + ICON.edit + '</button>' +
       '<button type="button" class="act" id="rot-' + p.uid + '" data-act="rot" title="Ruota di 90°" aria-label="Ruota di 90°">' + ICON.rot + '</button>' +
       '<button type="button" class="act del" id="del-' + p.uid + '" data-act="del" title="Elimina pagina" aria-label="Elimina pagina">' + ICON.x + '</button></div>' +
       '<div class="src"></div>';
@@ -1031,7 +1770,7 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
 
     pages.forEach((p, i) => {
       const c = cards.get(p.uid), doc = docs.get(p.docId);
-      const isSel = selected.has(p.uid), edited = p.items.length > 0;
+      const isSel = selected.has(p.uid), edited = p.items.length > 0 || hasEdits(p);
       c.pos.textContent = String(i + 1);
       c.mark.hidden = !edited;
       c.el.classList.toggle('is-selected', isSel);
@@ -1279,24 +2018,40 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
     }
   });
 
-  // ---- page editor: texts and signatures ----------------------------------
+  // ---- page editor ---------------------------------------------------------
   const editor = $('editor'), edStage = $('ed-stage'), edPage = $('ed-page');
-  const edCanvas = $('ed-canvas'), edLayer = $('ed-layer');
-  const edSizeSel = $('ed-size'), edDel = $('ed-del');
-  let ed = null;                 // { uid, p, g, s, items, sel, token }
-  let edSize = 12, edColor = '#111111';
+  const edCanvas = $('ed-canvas'), edLayer = $('ed-layer'), edTip = $('ed-tip');
+  const edSizeSel = $('ed-size'), edDel = $('ed-del'), edHint = $('ed-hint');
+  const txtCtl = $('txt-ctl'), hlCtl = $('hl-ctl'), noteBox = $('ed-note-box'), noteArea = $('ed-note');
+  const NOTE_SVG = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M1.5 14.5v-13h17v13H9l-4 4v-4z" fill="var(--hc)" stroke="#333" stroke-linejoin="round"/><path d="M5 5.6h10M5 9.2h10" stroke="#333" stroke-width="1.2"/></svg>';
+  const HINTS = {
+    '': 'Doppio clic sulla pagina per scrivere in quel punto. Trascina testi, firme, evidenziazioni e fumetti per spostarli. Le modifiche entrano nel PDF che scarichi, i file originali non cambiano.',
+    edit: 'Clicca una riga per cambiarne il testo. Invio conferma, Esc la lascia com’era. Quello che segue sulla stessa riga si sposta da solo.',
+    hl: 'Trascina sulla pagina per evidenziare. La nota che scrivi nel riquadro in basso compare passando il mouse sull’evidenziazione, qui e nei lettori PDF.'
+  };
+  let ed = null;                 // { uid, p, g, s, items, edits, sel, tool, an, token }
+  let edSize = 12, edColor = '#111111', hlColor = '#ffe838';
   let currentSig = null;         // last signature made in this visit, reused on other pages
+  let escAt = 0;
 
+  const itemEls = () => Array.from(edLayer.querySelectorAll('.it'));
   const itemOf = (id) => ed.items.find((it) => it.id === id);
-  const elOf = (id) => Array.from(edLayer.children).find((el) => el.dataset.id === id);
-  const signature = (items) => JSON.stringify(items.map((it) =>
-    [it.type, it.X, it.Y, it.ang, it.size, it.color, it.text, it.w, it.h, it.sig && it.sig.id]));
+  const elOf = (id) => itemEls().find((el) => el.dataset.id === id);
+  const marks = (it) => it.type === 'hl' || it.type === 'note';
+  const signature = (items, edits) => JSON.stringify([
+    items.map((it) => [it.type, it.X, it.Y, it.ang, it.size, it.color, it.text, it.w, it.h, it.note, it.sig && it.sig.id]),
+    Object.keys(edits).sort().map((k) => [k, edits[k]])
+  ]);
+  const hint = (msg) => { edHint.textContent = msg; };
 
   function openEditor(uid) {
     const i = pages.findIndex((p) => p.uid === uid);
     if (i < 0) return;
     const p = pages[i];
-    ed = { uid, p, g: geom(p), s: 1, items: p.items.map((it) => Object.assign({}, it)), sel: null, token: null };
+    ed = {
+      uid, p, g: geom(p), s: 1, sel: null, tool: ed ? ed.tool : '', an: null, token: null,
+      items: p.items.map((it) => Object.assign({}, it)), edits: Object.assign({}, p.edits)
+    };
     $('ed-title').textContent = 'Modifica pagina ' + (i + 1);
     $('ed-pos').textContent = (i + 1) + ' di ' + pages.length;
     $('ed-prev').disabled = i === 0;
@@ -1304,6 +2059,7 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
     $('ed-newsig').hidden = !currentSig;
     if (!editor.open) editor.showModal();
     edStage.scrollTop = 0;
+    showTool();
     layoutEditor();
   }
 
@@ -1316,23 +2072,35 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
     edLayer.replaceChildren();
     for (const it of ed.items) edLayer.appendChild(buildItem(it));
     select(null);
-    paintEditorPage();
+    paintEditorPage(true);
+    if (ed.tool === 'edit') showLines();
   }
 
-  async function paintEditorPage() {
+  async function paintEditorPage(fresh) {
     const mine = ed.token = {};
-    const g = ed.g, doc = docs.get(ed.p.docId);
+    const g = ed.g, p = ed.p, doc = docs.get(p.docId), edits = Object.assign({}, ed.edits);
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = Math.max(1, Math.round(g.vw * ed.s * dpr)), h = Math.max(1, Math.round(g.vh * ed.s * dpr));
-    edCanvas.width = w;
-    edCanvas.height = h;
     const cx = edCanvas.getContext('2d');
-    cx.fillStyle = '#ffffff';
-    cx.fillRect(0, 0, w, h);
+    if (fresh || edCanvas.width !== w || edCanvas.height !== h) {
+      edCanvas.width = w;
+      edCanvas.height = h;
+      cx.fillStyle = '#ffffff';
+      cx.fillRect(0, 0, w, h);
+    }
     if (!doc.pdfjs) return;
+    let temp = null;
     try {
-      const page = await doc.pdfjs.getPage(ed.p.index + 1);
-      const rotation = norm((page.rotate || 0) + ed.p.rot);
+      let page;
+      if (Object.keys(edits).length) {
+        // the page is shown from the rewritten bytes, so what you see is what will be saved
+        const bytes = await pagePdf({ docId: p.docId, index: p.index, edits, items: [] });
+        temp = await pdfjsLib.getDocument({ data: bytes, isEvalSupported: false }).promise;
+        page = await temp.getPage(1);
+      } else {
+        page = await doc.pdfjs.getPage(p.index + 1);
+      }
+      const rotation = norm((page.rotate || 0) + p.rot);
       const base = page.getViewport({ scale: 1, rotation });
       const viewport = page.getViewport({ scale: w / base.width, rotation });
       // paint off screen first, so a slow render never lands on a page opened later
@@ -1341,7 +2109,8 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
       off.height = h;
       await page.render({ canvasContext: off.getContext('2d', { alpha: false }), viewport }).promise;
       if (ed && ed.token === mine) cx.drawImage(off, 0, 0);
-    } catch (e) { /* the page stays white, items can still be placed */ }
+    } catch (e) { /* the page stays as it was, items can still be placed */ }
+    if (temp) temp.destroy();
   }
 
   function buildItem(it) {
@@ -1364,15 +2133,20 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
       grip.className = 'grip';
       grip.title = 'Sposta';
       el.append(body, grip);
+    } else if (it.type === 'note') {
+      el.innerHTML = NOTE_SVG;
     } else {
-      const img = document.createElement('img');
-      img.src = it.sig.url;
-      img.alt = 'Firma';
-      img.draggable = false;
+      if (it.type === 'img') {
+        const img = document.createElement('img');
+        img.src = it.sig.url;
+        img.alt = 'Firma';
+        img.draggable = false;
+        el.appendChild(img);
+      }
       const rs = document.createElement('span');
       rs.className = 'rs';
       rs.title = 'Ridimensiona';
-      el.append(img, rs);
+      el.appendChild(rs);
     }
     place(el, it);
     return el;
@@ -1386,8 +2160,12 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
       el.firstChild.style.fontSize = it.size * ed.s + 'px';
       el.firstChild.style.color = it.color;
     } else {
-      el.style.width = it.w * ed.s + 'px';
-      el.style.height = it.h * ed.s + 'px';
+      el.style.width = (it.type === 'note' ? NOTE_PT : it.w) * ed.s + 'px';
+      el.style.height = (it.type === 'note' ? NOTE_PT : it.h) * ed.s + 'px';
+    }
+    if (marks(it)) {
+      el.style.setProperty('--hc', it.color);
+      el.classList.toggle('has-note', !!it.note.trim());
     }
   }
   function setSwatches(group, color) {
@@ -1395,18 +2173,151 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
   }
   function select(id) {
     ed.sel = id;
-    for (const el of edLayer.children) el.classList.toggle('sel', el.dataset.id === id);
+    for (const el of itemEls()) el.classList.toggle('sel', el.dataset.id === id);
     const it = id ? itemOf(id) : null;
     edDel.disabled = !it;
-    if (it && it.type === 'text') {
-      edSize = it.size;
-      edColor = it.color;
-    }
+    if (it && it.type === 'text') { edSize = it.size; edColor = it.color; }
+    if (it && marks(it)) hlColor = it.color;
     edSizeSel.value = String(edSize);
-    setSwatches(editor, edColor);
+    setSwatches(txtCtl, edColor);
+    setSwatches(hlCtl, hlColor);
+    $('hl-custom').value = hlColor;
+    txtCtl.hidden = !(it && it.type === 'text');
+    hlCtl.hidden = !(ed.tool === 'hl' || (it && marks(it)));
+    noteBox.hidden = !(it && marks(it));
+    if (it && marks(it)) noteArea.value = it.note;
+    edTip.hidden = true;
   }
+  function showTool() {
+    $('ed-edit').setAttribute('aria-pressed', String(ed.tool === 'edit'));
+    $('ed-hl').setAttribute('aria-pressed', String(ed.tool === 'hl'));
+    edLayer.classList.toggle('tool-edit', ed.tool === 'edit');
+    edLayer.classList.toggle('tool-hl', ed.tool === 'hl');
+    hint(HINTS[ed.tool]);
+  }
+  function setTool(tool) {
+    ed.tool = ed.tool === tool ? '' : tool;
+    showTool();
+    select(ed.sel);
+    if (ed.tool === 'edit') showLines(); else clearLines();
+  }
+
+  // ---- editor: the text already on the page --------------------------------
+  function clearLines() { for (const el of edLayer.querySelectorAll('.tl')) el.remove(); }
+  async function showLines() {
+    const uid = ed.uid, doc = docs.get(ed.p.docId);
+    hint('Leggo il testo della pagina…');
+    const an = await analyzePage(doc, ed.p.index);
+    if (an.ok) for (const name of new Set(an.groups.map((g) => g.info.std))) await prepStd(name);
+    if (!ed || ed.uid !== uid || ed.tool !== 'edit') return;
+    ed.an = an;
+    gatherFonts(doc);
+    if (an.ok && an.groups.length) hint(HINTS.edit);
+    drawLines();
+  }
+  // Where a line sits on screen: a box laid along its baseline, whatever way the text runs.
+  function lineBox(g, width, shift) {
+    const s = ed.s, em = g.fs, top = g.info.asc * em, bot = g.info.desc * em;
+    const P = (x, y) => {
+      const u = at(g.M, g.tx0 + shift + x, g.rise + y), v = pdfToView(ed.g, u[0], u[1]);
+      return [v[0] * s, v[1] * s];
+    };
+    const o = P(0, top), px = P(1, top), py = P(0, top - 1);
+    const ax = px[0] - o[0], ay = px[1] - o[1], bx = py[0] - o[0], by = py[1] - o[1];
+    const lx = Math.hypot(ax, ay), ly = Math.hypot(bx, by);
+    return {
+      w: Math.max(width * lx, 6), h: (top - bot) * ly, em: em * ly,
+      css: 'matrix(' + [ax / lx, ay / lx, bx / ly, by / ly, o[0], o[1]].map((v) => v.toFixed(5)).join(',') + ')'
+    };
+  }
+  function drawLines() {
+    clearLines();
+    const an = ed.an;
+    if (!an || !an.ok || !an.groups.length) {
+      hint('In questa pagina non trovo testo da modificare: è un’immagine (una scansione), oppure è scritto in un modo che non so riscrivere.');
+      return;
+    }
+    const plan = planEdits(an, ed.edits), frag = document.createDocumentFragment();
+    for (const g of an.groups) {
+      const lay = plan.lays.get(g), box = lineBox(g, lay ? lay.width : g.width, plan.shift(g));
+      const el = document.createElement('div');
+      el.className = 'tl' + (lay ? ' changed' : '');
+      el.dataset.gid = String(g.id);
+      el.dataset.em = String(box.em);
+      el.setAttribute('role', 'button');
+      el.tabIndex = 0;
+      el.setAttribute('aria-label', 'Modifica: ' + (lay ? ed.edits[g.id] : g.text));
+      el.style.width = box.w + 'px';
+      el.style.height = box.h + 'px';
+      el.style.transform = box.css;
+      frag.appendChild(el);
+    }
+    edLayer.prepend(frag);
+  }
+  function editLine(el) {
+    if (el.querySelector('.tl-in')) return;
+    const g = ed.an.byId.get(Number(el.dataset.gid));
+    if (!g) return;
+    const before = g.id in ed.edits ? ed.edits[g.id] : g.text, std = g.info.std;
+    const inp = document.createElement('div');
+    inp.className = 'tl-in';
+    inp.id = 'line-' + g.id;
+    inp.setAttribute('role', 'textbox');
+    inp.setAttribute('aria-label', 'Testo della riga');
+    inp.spellcheck = false;
+    try { inp.contentEditable = 'plaintext-only'; } catch (e) { /* older browsers */ }
+    if (inp.contentEditable !== 'plaintext-only') inp.contentEditable = 'true';
+    inp.textContent = before;
+    inp.style.fontFamily = /^Courier/.test(std) ? '"Courier New", Courier, monospace'
+      : /^Times/.test(std) ? '"Times New Roman", Times, serif' : FONT_STACK;
+    inp.style.fontWeight = /Bold/.test(std) ? '700' : '400';
+    inp.style.fontStyle = /Italic|Oblique/.test(std) ? 'italic' : 'normal';
+    inp.style.fontSize = el.dataset.em + 'px';
+    inp.style.lineHeight = el.style.height;
+    el.appendChild(inp);
+    let done = false;
+    const finish = (save) => {
+      if (done) return;
+      done = true;
+      const val = inp.innerText.replace(/\n+$/, '').replace(/[\r\n]+/g, ' ');
+      inp.remove();
+      if (save && val !== before && ed) setEdit(g, val);
+    };
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); escAt = Date.now(); finish(false); }
+    });
+    inp.addEventListener('blur', () => finish(true));
+    inp.focus();
+    const range = document.createRange();
+    range.selectNodeContents(inp);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  function setEdit(g, val) {
+    const lay = layout(g, val);
+    if (lay.clean === g.text) delete ed.edits[g.id]; else ed.edits[g.id] = lay.clean;
+    drawLines();
+    hint(lay.dropped ? 'Riga cambiata. Alcuni caratteri non si possono scrivere con i caratteri disponibili e li ho tolti.'
+      : lay.std ? 'Riga cambiata. Alcuni caratteri mancano nel carattere del documento: per quelli ho usato un carattere simile.'
+        : 'Riga cambiata con il carattere originale del documento.');
+    paintEditorPage(false);
+  }
+  edLayer.addEventListener('click', (e) => {
+    const tl = e.target.closest('.tl');
+    if (tl && ed && ed.tool === 'edit' && !e.target.closest('.tl-in')) editLine(tl);
+  });
+  edLayer.addEventListener('keydown', (e) => {
+    if ((e.key !== 'Enter' && e.key !== ' ') || !e.target.classList.contains('tl') || !ed || ed.tool !== 'edit') return;
+    e.preventDefault();
+    editLine(e.target);
+  });
+
+  // ---- editor: texts, signatures, highlights and notes added on top --------
   function readText(body) {
-    return body.innerText.replace(/ /g, ' ').replace(/\r/g, '').replace(/\t/g, '    ')
+    return body.innerText.replace(/\u00a0/g, ' ').replace(/\r/g, '').replace(/\t/g, '    ')
       .replace(/[\u0000-\u0009\u000b-\u001f]/g, '').replace(/\s+$/, '');
   }
   function visibleCenter() {
@@ -1437,6 +2348,13 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
     sel.removeAllRanges();
     sel.addRange(range);
   }
+  function addItem(it) {
+    ed.items.push(it);
+    const el = buildItem(it);
+    edLayer.appendChild(el);
+    select(it.id);
+    return el;
+  }
   function addText(vx, vy) {
     const g = ed.g;
     if (vx === undefined) {
@@ -1444,24 +2362,22 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
       vx = c[0] - 40;
       vy = c[1] - edSize * 0.6;
     }
-    const at = viewToPdf(g, clamp(vx, 0, g.vw - 10), clamp(vy, 0, g.vh - edSize));
-    const it = { id: 'i' + (++itemSeq), type: 'text', X: at[0], Y: at[1], ang: g.R, size: edSize, color: edColor, text: '' };
-    ed.items.push(it);
-    const el = buildItem(it);
-    edLayer.appendChild(el);
-    select(it.id);
-    focusText(el);
+    const p = viewToPdf(g, clamp(vx, 0, g.vw - 10), clamp(vy, 0, g.vh - edSize));
+    focusText(addItem({ id: 'i' + (++itemSeq), type: 'text', X: p[0], Y: p[1], ang: g.R, size: edSize, color: edColor, text: '' }));
   }
   function placeSig(sig) {
     const g = ed.g;
     let w = Math.min(sig.defW, g.vw * 0.45), h = w / sig.ar;
     if (h > g.vh * 0.3) { h = g.vh * 0.3; w = h * sig.ar; }
     const c = visibleCenter();
-    const at = viewToPdf(g, clamp(c[0] - w / 2, 0, Math.max(0, g.vw - w)), clamp(c[1] - h / 2, 0, Math.max(0, g.vh - h)));
-    const it = { id: 'i' + (++itemSeq), type: 'img', X: at[0], Y: at[1], ang: g.R, w, h, sig };
-    ed.items.push(it);
-    edLayer.appendChild(buildItem(it));
-    select(it.id);
+    const p = viewToPdf(g, clamp(c[0] - w / 2, 0, Math.max(0, g.vw - w)), clamp(c[1] - h / 2, 0, Math.max(0, g.vh - h)));
+    addItem({ id: 'i' + (++itemSeq), type: 'img', X: p[0], Y: p[1], ang: g.R, w, h, sig });
+  }
+  function addNote() {
+    const g = ed.g, c = visibleCenter();
+    const p = viewToPdf(g, clamp(c[0] - NOTE_PT / 2, 0, g.vw - NOTE_PT), clamp(c[1] - NOTE_PT / 2, 0, g.vh - NOTE_PT));
+    addItem({ id: 'i' + (++itemSeq), type: 'note', X: p[0], Y: p[1], ang: g.R, color: hlColor, note: '' });
+    noteArea.focus();
   }
   function removeItem(id) {
     ed.items = ed.items.filter((it) => it.id !== id);
@@ -1469,28 +2385,40 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
     if (el) el.remove();
     select(null);
   }
+  function setHlColor(color) {
+    hlColor = color;
+    setSwatches(hlCtl, color);
+    const it = ed.sel && itemOf(ed.sel);
+    if (it && marks(it)) { it.color = color; place(elOf(it.id), it); }
+  }
   function commitEditor() {
     if (!ed) return false;
     const live = pages.find((p) => p.uid === ed.uid);
-    const items = ed.items.filter((it) => it.type !== 'text' || it.text.trim());
-    if (!live || signature(items) === signature(live.items)) return false;
+    // a text box left empty, or a bubble with nothing written in it, is not kept
+    const items = ed.items.filter((it) => (it.type !== 'text' || it.text.trim()) && (it.type !== 'note' || it.note.trim()));
+    if (!live || signature(items, ed.edits) === signature(live.items, live.edits)) return false;
     pushUndo();
     live.items = items;
+    live.edits = Object.assign({}, ed.edits);
     live.rev = ++revSeq;
     return true;
   }
   function closeEditor() {
     if (!ed) return;
+    if (edLayer.contains(document.activeElement)) document.activeElement.blur();
     const uid = ed.uid, changed = commitEditor();
     ed = null;
     if (editor.open) editor.close();
     edLayer.replaceChildren();
+    edTip.hidden = true;
+    noteBox.hidden = true;
     sync();
     const c = cards.get(uid);
     if (c) c.el.focus();
     if (changed) say('Pagina modificata. Con Annulla torni a com’era.');
   }
   function stepEditor(delta) {
+    if (edLayer.contains(document.activeElement)) document.activeElement.blur();
     const i = pages.findIndex((p) => p.uid === ed.uid), next = pages[i + delta];
     if (!next) return;
     commitEditor();
@@ -1498,30 +2426,45 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
     openEditor(next.uid);
   }
 
+  $('ed-edit').addEventListener('click', () => setTool('edit'));
+  $('ed-hl').addEventListener('click', () => setTool('hl'));
   $('ed-text').addEventListener('click', () => addText());
+  $('ed-note-add').addEventListener('click', addNote);
   $('ed-sign').addEventListener('click', () => { if (currentSig) placeSig(currentSig); else openPad(); });
   $('ed-newsig').addEventListener('click', openPad);
   $('ed-done').addEventListener('click', closeEditor);
   $('ed-prev').addEventListener('click', () => stepEditor(-1));
   $('ed-next').addEventListener('click', () => stepEditor(1));
   edDel.addEventListener('click', () => { if (ed.sel) removeItem(ed.sel); });
-  editor.addEventListener('cancel', (e) => { e.preventDefault(); closeEditor(); });
+  editor.addEventListener('cancel', (e) => {
+    e.preventDefault();
+    if (Date.now() - escAt > 400) closeEditor();     // Esc inside a line being typed only leaves that line
+  });
   edSizeSel.addEventListener('change', () => {
     edSize = Number(edSizeSel.value) || 12;
     const it = ed.sel && itemOf(ed.sel);
     if (it && it.type === 'text') { it.size = edSize; place(elOf(it.id), it); }
   });
-  editor.querySelector('.ed-bar .swatches').addEventListener('click', (e) => {
+  txtCtl.addEventListener('click', (e) => {
     const b = e.target.closest('.sw');
     if (!b) return;
     edColor = b.dataset.color;
-    setSwatches(editor, edColor);
+    setSwatches(txtCtl, edColor);
     const it = ed.sel && itemOf(ed.sel);
     if (it && it.type === 'text') { it.color = edColor; place(elOf(it.id), it); }
   });
+  hlCtl.addEventListener('click', (e) => {
+    const b = e.target.closest('.sw');
+    if (b) { setHlColor(b.dataset.color); $('hl-custom').value = b.dataset.color; }
+  });
+  $('hl-custom').addEventListener('input', (e) => setHlColor(e.target.value));
+  noteArea.addEventListener('input', () => {
+    const it = ed && ed.sel && itemOf(ed.sel);
+    if (it && marks(it)) { it.note = noteArea.value; place(elOf(it.id), it); }
+  });
   editor.addEventListener('keydown', (e) => {
     if (!ed || !ed.sel || (e.key !== 'Delete' && e.key !== 'Backspace')) return;
-    if (e.target.closest && e.target.closest('.it-body, input, select')) return;
+    if (e.target.closest && e.target.closest('.it-body, .tl-in, input, select, textarea')) return;
     e.preventDefault();
     removeItem(ed.sel);
   });
@@ -1534,18 +2477,34 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
     if (!it.text && e.target.textContent === '') e.target.replaceChildren();   // drop a leftover line break so the hint shows again
   });
   edLayer.addEventListener('paste', (e) => {
-    if (!e.target.closest('.it-body') || !e.clipboardData) return;
+    if (!e.target.closest('.it-body, .tl-in') || !e.clipboardData) return;
     e.preventDefault();
-    document.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
+    document.execCommand('insertText', false, e.clipboardData.getData('text/plain').replace(/[\r\n]+/g, e.target.closest('.tl-in') ? ' ' : '\n'));
   });
   edLayer.addEventListener('dblclick', (e) => {
-    if (e.target.closest('.it')) return;
+    if (ed.tool || e.target.closest('.it, .tl')) return;
     const r = edLayer.getBoundingClientRect();
     addText((e.clientX - r.left) / ed.s, (e.clientY - r.top) / ed.s - edSize * 0.6);
   });
 
+  // The note of a highlight or a bubble shows while the pointer is over it.
+  edLayer.addEventListener('mouseover', (e) => {
+    const el = e.target.closest('.it-hl, .it-note'), it = el && itemOf(el.dataset.id);
+    if (!it || !it.note.trim() || move || draw) { edTip.hidden = true; return; }
+    const r = el.getBoundingClientRect(), pr = edPage.getBoundingClientRect();
+    edTip.textContent = it.note.trim();
+    edTip.style.left = Math.max(0, r.left - pr.left) + 'px';
+    edTip.style.top = r.bottom - pr.top + 6 + 'px';
+    edTip.hidden = false;
+  });
+  edLayer.addEventListener('mouseout', (e) => {
+    const to = e.relatedTarget;
+    if (!to || !to.closest || !to.closest('.it-hl, .it-note')) edTip.hidden = true;
+  });
+
   // A press moves an item, unless it lands inside a text that is already being typed in.
-  let move = null;
+  // With the highlighter on, a press on the bare page starts a new highlight.
+  let move = null, draw = null;
   function movesItem(e) {
     const el = e.target.closest('.it');
     if (!el) return false;
@@ -1553,13 +2512,25 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
     const body = el.querySelector('.it-body');
     return !(body && document.activeElement === body);
   }
-  edLayer.addEventListener('mousedown', (e) => { if (movesItem(e)) e.preventDefault(); });
+  edLayer.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.tl-in')) return;
+    if (movesItem(e) || (ed.tool === 'hl' && !e.target.closest('.it'))) e.preventDefault();
+  });
   edLayer.addEventListener('pointerdown', (e) => {
-    if (e.button) return;
+    if (e.button || e.target.closest('.tl-in')) return;
     const el = e.target.closest('.it');
     if (!el) {
       if (edLayer.contains(document.activeElement)) document.activeElement.blur();
       select(null);
+      if (ed.tool === 'hl') {
+        const r = edLayer.getBoundingClientRect();
+        const ghost = document.createElement('div');
+        ghost.className = 'hl-ghost';
+        ghost.style.setProperty('--hc', hlColor);
+        edLayer.appendChild(ghost);
+        draw = { pointer: e.pointerId, x: e.clientX - r.left, y: e.clientY - r.top, left: r.left, top: r.top, ghost, box: null };
+        try { edLayer.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ }
+      }
       return;
     }
     const it = itemOf(el.dataset.id);
@@ -1572,9 +2543,19 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
       pointer: e.pointerId, el, it, x: e.clientX, y: e.clientY, vx: v[0], vy: v[1], w: it.w, h: it.h,
       size: !!e.target.closest('.rs'), handle: !!e.target.closest('.grip, .rs'), moved: false
     };
+    edTip.hidden = true;
     try { edLayer.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ }
   });
   edLayer.addEventListener('pointermove', (e) => {
+    if (draw && e.pointerId === draw.pointer) {
+      const x = e.clientX - draw.left, y = e.clientY - draw.top;
+      draw.box = [Math.min(x, draw.x), Math.min(y, draw.y), Math.abs(x - draw.x), Math.abs(y - draw.y)];
+      draw.ghost.style.left = draw.box[0] + 'px';
+      draw.ghost.style.top = draw.box[1] + 'px';
+      draw.ghost.style.width = draw.box[2] + 'px';
+      draw.ghost.style.height = draw.box[3] + 'px';
+      return;
+    }
     if (!move || e.pointerId !== move.pointer) return;
     const px = e.clientX - move.x, py = e.clientY - move.y;
     if (!move.moved && Math.hypot(px, py) < 4) return;
@@ -1582,16 +2563,35 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
     const dx = px / ed.s, dy = py / ed.s, it = move.it, g = ed.g;
     if (move.size) {
       const f = norm(g.R - it.ang) * Math.PI / 180;
-      it.w = Math.max(24, move.w + dx * Math.cos(f) + dy * Math.sin(f));
-      it.h = it.w * move.h / move.w;
+      const along = dx * Math.cos(f) + dy * Math.sin(f), down = dy * Math.cos(f) - dx * Math.sin(f);
+      if (it.type === 'hl') {
+        it.w = Math.max(4, move.w + along);
+        it.h = Math.max(4, move.h + down);
+      } else {
+        it.w = Math.max(24, move.w + along);
+        it.h = it.w * move.h / move.w;
+      }
     } else {
-      const at = viewToPdf(g, clamp(move.vx + dx, -30, g.vw - 6), clamp(move.vy + dy, -30, g.vh - 6));
-      it.X = at[0];
-      it.Y = at[1];
+      const p = viewToPdf(g, clamp(move.vx + dx, -30, g.vw - 6), clamp(move.vy + dy, -30, g.vh - 6));
+      it.X = p[0];
+      it.Y = p[1];
     }
     place(move.el, it);
   });
   function endMove(e) {
+    if (draw && e.pointerId === draw.pointer) {
+      const d = draw, g = ed.g, s = ed.s;
+      draw = null;
+      d.ghost.remove();
+      try { edLayer.releasePointerCapture(e.pointerId); } catch (err) { /* already released */ }
+      if (!d.box || d.box[2] < 4 || d.box[3] < 4) return;
+      const x1 = clamp(d.box[0] / s, 0, g.vw), y1 = clamp(d.box[1] / s, 0, g.vh);
+      const x2 = clamp((d.box[0] + d.box[2]) / s, 0, g.vw), y2 = clamp((d.box[1] + d.box[3]) / s, 0, g.vh);
+      if (x2 - x1 < 2 || y2 - y1 < 2) return;
+      const p = viewToPdf(g, x1, y1);
+      addItem({ id: 'i' + (++itemSeq), type: 'hl', X: p[0], Y: p[1], ang: g.R, w: x2 - x1, h: y2 - y1, color: hlColor, note: '' });
+      return;
+    }
     if (!move || e.pointerId !== move.pointer) return;
     const m = move;
     move = null;
@@ -1831,6 +2831,7 @@ window.__pdfWorkerReady = new Promise(function (resolve) {
     for (let i = 0; i < pages.length; i++) {
       const p = pages[i], page = slots[i];
       out.addPage(page);
+      if (hasEdits(p)) await applyEdits(out, page, p, res);
       if (p.items.length) await applyItems(out, page, p.items, res);
       if (p.rot) page.setRotation(degrees(norm(page.getRotation().angle + p.rot)));
     }
