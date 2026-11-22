@@ -4,7 +4,11 @@ Unisce più PDF in un unico file, direttamente nel browser: riordino, eliminazio
 
 ![Unisci PDF con tre documenti caricati: cinque miniature di pagina, la prima con evidenziazioni e firma, due selezionate](screenshot.png)
 
-*I documenti nello screenshot sono esempi inventati.*
+L'editor di pagina, con un'evidenziazione, la sua nota a comparsa e una firma:
+
+![Editor di pagina: una tabella con una cella evidenziata in verde, la nota che compare al passaggio del mouse e una firma sopra la riga del verificatore](editor.png)
+
+*I documenti negli screenshot sono esempi inventati.*
 
 ## Come si usa
 
