@@ -449,6 +449,30 @@ dialog p { margin: 0 0 12px; }
 }
 .note-box textarea { width: 100%; resize: vertical; }
 
+/* search inside the document being read */
+.btn.tool[aria-expanded="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.find-box {
+  position: absolute; right: 26px; top: 10px; z-index: 4;
+  display: flex; align-items: center; gap: 6px;
+  max-width: calc(100% - 36px); padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 6px 18px var(--sheet-shadow);
+}
+.find-box .field { flex: 1; width: 230px; min-width: 90px; }
+.find-box.none .field { border-color: var(--danger); }
+.find-count { min-width: 84px; text-align: center; }
+/* a place where the words were found; the one being shown is marked more strongly */
+.fm {
+  position: absolute; left: 0; top: 0;
+  transform-origin: 0 0;
+  background: #ffe24a; mix-blend-mode: multiply;
+  box-shadow: 0 0 0 1px #c9a200;
+  pointer-events: none;
+}
+.fm.cur { background: #ffa53d; box-shadow: 0 0 0 2px var(--on-paper); }
+
 .legal-line { margin-top: 10px; }
 .legal { width: min(880px, calc(100% - 24px)); height: min(760px, calc(100% - 24px)); padding: 18px; }
 .legal[open] { display: flex; flex-direction: column; gap: 10px; }
@@ -469,6 +493,8 @@ dialog p { margin: 0 0 12px; }
   .sel-count { min-width: 0; width: 100%; }
   h1 { font-size: 26px; }
   .ed-nav { margin-left: 0; width: 100%; justify-content: flex-end; }
+  .find-box { left: 8px; right: 8px; max-width: none; }
+  .find-count { min-width: 0; }
 }
 </style>
 </head>
@@ -607,6 +633,11 @@ dialog p { margin: 0 0 12px; }
       <input type="color" class="sw-any" id="hl-custom" value="#ffe838" aria-label="Altro colore" title="Altro colore">
     </div>
     <div class="ed-nav">
+      <button type="button" class="btn tool" id="ed-find" aria-expanded="false" aria-controls="find-box" title="Cerca nel documento (Ctrl+F)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+        Cerca
+      </button>
+      <span class="sep" aria-hidden="true"></span>
       <button type="button" class="btn icon" id="ed-zoom-out" aria-label="Riduci" title="Riduci">−</button>
       <span class="ed-pos" id="ed-zoom">100%</span>
       <button type="button" class="btn icon" id="ed-zoom-in" aria-label="Ingrandisci" title="Ingrandisci">+</button>
@@ -626,6 +657,13 @@ dialog p { margin: 0 0 12px; }
     <div class="note-box" id="ed-note-box" hidden>
       <label for="ed-note">Nota a comparsa</label>
       <textarea class="field" id="ed-note" rows="3" placeholder="Compare quando passi il mouse sull'evidenziazione o sul fumetto"></textarea>
+    </div>
+    <div class="find-box" id="find-box" role="search" hidden>
+      <input type="text" class="field" id="find-q" placeholder="Cerca nel documento" aria-label="Cerca nel documento" autocomplete="off" spellcheck="false" enterkeyhint="search">
+      <span class="ed-pos find-count" id="find-count" role="status"></span>
+      <button type="button" class="btn icon" id="find-prev" aria-label="Risultato precedente" title="Risultato precedente (Maiusc+Invio)" disabled>‹</button>
+      <button type="button" class="btn icon" id="find-next" aria-label="Risultato successivo" title="Risultato successivo (Invio)" disabled>›</button>
+      <button type="button" class="btn icon" id="find-close" aria-label="Chiudi la ricerca" title="Chiudi (Esc)">×</button>
     </div>
   </div>
   <p class="ed-hint" id="ed-hint" role="status"></p>
@@ -2115,13 +2153,15 @@ This page loads the following libraries, each under its own license:
   const txtCtl = $('txt-ctl'), hlCtl = $('hl-ctl'), noteBox = $('ed-note-box'), noteArea = $('ed-note');
   const NOTE_SVG = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M1.5 14.5v-13h17v13H9l-4 4v-4z" fill="var(--hc)" stroke="#333" stroke-linejoin="round"/><path d="M5 5.6h10M5 9.2h10" stroke="#333" stroke-width="1.2"/></svg>';
   const HINTS = {
-    '': 'Doppio clic sulla pagina per scrivere in quel punto. Trascina testi, firme, evidenziazioni e fumetti per spostarli.',
+    '': 'Doppio clic sulla pagina per scrivere in quel punto. Trascina testi, firme, evidenziazioni e fumetti per spostarli. Ctrl+F cerca nel documento.',
     edit: 'Clicca una riga per cambiarne il testo. Invio conferma, Esc la lascia com’era. Quello che segue sulla stessa riga si sposta da solo.',
     hl: 'Trascina sulla pagina per evidenziare. La nota che scrivi nel riquadro in basso compare passando il mouse sull’evidenziazione, qui e nei lettori PDF.'
   };
   const NO_TEXT = 'In questa pagina non trovo testo da modificare: è un’immagine (una scansione), oppure è scritto in un modo che non so riscrivere.';
   const PX_PER_PT = 96 / 72;
   const view = { open: false, viewer: false, fit: true, ctxs: [], byUid: new Map(), tool: '', sel: null, z: 1, undo: [], cur: null };
+  // search: the words looked for, where they were found, the result being shown, the text read from each page
+  const find = { open: false, running: false, q: '', hits: [], ranges: new Map(), cur: -1, token: 0, cache: new Map() };
   let edSize = 12, edColor = '#111111', hlColor = '#ffe838';
   let currentSig = null;         // last signature made in this visit, reused on other pages
   let escAt = 0;
@@ -2145,6 +2185,7 @@ This page loads the following libraries, each under its own license:
 
   function openView(uid, viewer) {
     if (!pages.length) return;
+    resetFind();
     view.ctxs = pages.map((p, i) => {
       const el = document.createElement('div'), layer = document.createElement('div');
       el.className = 'ed-page';
@@ -2202,6 +2243,7 @@ This page loads the following libraries, each under its own license:
   }
   function refreshPage(ctx) {
     queuePaint(ctx);
+    drawFinds(ctx);
     if (view.tool === 'edit') showLines(ctx);
   }
   function setZoom(z, fit) {
@@ -2415,6 +2457,7 @@ This page loads the following libraries, each under its own license:
     if (view.undo.length > 80) view.undo.shift();
     edUndo.disabled = false;
     dirty = true;
+    findLater(true);
   }
   function viewUndo() {
     const s = view.undo.pop();
@@ -2431,6 +2474,7 @@ This page loads the following libraries, each under its own license:
     queuePaint(ctx);
     if (!ctx.near || ctx !== view.cur) goToPage(ctx.n);
     hint('Ultima modifica annullata.');
+    findLater(true);
   }
 
   // ---- view: the text already on the page --------------------------------------
@@ -2646,6 +2690,7 @@ This page loads the following libraries, each under its own license:
   function closeView() {
     if (!view.open) return;
     blurInside();
+    resetFind();
     const uid = view.cur ? view.cur.uid : null, changed = commitView();
     view.open = false;
     for (const c of view.ctxs) pageIO.unobserve(c.el);
@@ -2706,6 +2751,9 @@ This page loads the following libraries, each under its own license:
   });
   editor.addEventListener('keydown', (e) => {
     if (!view.open) return;
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && !e.altKey && !e.shiftKey && (e.key === 'f' || e.key === 'F')) { e.preventDefault(); openFind(); return; }
+    if (find.open && (e.key === 'F3' || (mod && (e.key === 'g' || e.key === 'G')))) { e.preventDefault(); stepFind(e.shiftKey ? -1 : 1); return; }
     const typing = e.target.closest && e.target.closest('.it-body, .tl-in, input, select, textarea');
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z') && !typing) {
       e.preventDefault();
@@ -2726,6 +2774,7 @@ This page loads the following libraries, each under its own license:
     if (!it) return;
     it.text = readText(e.target);
     if (!it.text && e.target.textContent === '') e.target.replaceChildren();   // drop a leftover line break so the hint shows again
+    findLater(true);
   });
   edPages.addEventListener('paste', (e) => {
     if (!e.target.closest('.it-body, .tl-in') || !e.clipboardData) return;
@@ -2859,6 +2908,291 @@ This page loads the following libraries, each under its own license:
     if (!view.open || !view.fit) return;
     clearTimeout(refit);
     refit = setTimeout(() => { if (view.open && view.fit && view.cur) setZoom(fitZoom(view.cur), true); }, 150);
+  });
+
+  // ---- view: searching the text of the document ---------------------------------
+  // The words of each page are read with PDF.js from the page as it stands now, so lines already
+  // rewritten and texts added on top are found too. Capitals and accents do not count.
+  const findBox = $('find-box'), findQ = $('find-q'), findCount = $('find-count');
+  const findBtn = $('ed-find'), findPrev = $('find-prev'), findNext = $('find-next');
+  const measure = document.createElement('canvas').getContext('2d');
+  const FIND_HINT = 'Scrivi le parole da cercare. Invio passa al risultato successivo, Maiusc+Invio al precedente, Esc chiude la ricerca.';
+  const NO_WORDS = 'In questo documento non c’è testo in cui cercare: le pagine sono immagini, come in una scansione.';
+  let findTimer = 0, findKeep = false;
+
+  const foldChar = (ch) => (ch.charCodeAt(0) < 128 ? ch.toLowerCase()
+    : ch.toLowerCase().normalize('NFKD').replace(/\p{M}+/gu, '').toLowerCase());
+  function fold(str) {
+    let out = '';
+    for (const ch of str) out += /\s/.test(ch) ? ' ' : foldChar(ch);
+    return out.replace(/ +/g, ' ').trim();
+  }
+  // Words typed with their accents are looked for with those accents. Typed without, accents do not count.
+  function accented(raw) {
+    const s = raw.replace(/\s+/g, ' ').trim().normalize('NFKC').toLowerCase();
+    return s === fold(raw) ? '' : s;
+  }
+  // The characters of the page behind a stretch of its folded text.
+  function original(t, s, e) {
+    let out = '', item = -2, from = -1;
+    for (let i = s; i < e; i++) {
+      if (t.ai[i] === item && t.ac[i] === from) continue;      // one character can fold into more than one
+      item = t.ai[i];
+      from = t.ac[i];
+      out += t.text[i] === ' ' ? ' ' : t.items[item].str.slice(from, t.ae[i]);
+    }
+    if (item >= 0) {
+      const tail = t.items[item].str.slice(t.ae[e - 1]).match(/^\p{M}+/u);
+      if (tail) out += tail[0];
+    }
+    return out.normalize('NFKC').toLowerCase();
+  }
+  const isText = (it) => it.type === 'text' && it.text.trim() !== '';
+  const textKey = (ctx) => JSON.stringify([ctx.edits, ctx.items.filter(isText).map((it) => [it.X, it.Y, it.ang, it.size, it.text])]);
+
+  // The folded text of a page, with the piece of the page each of its characters comes from.
+  function pageText(ctx) {
+    const key = textKey(ctx), had = find.cache.get(ctx.uid);
+    if (had && had.key === key) return had.text;
+    const text = readWords(ctx).catch(() => ({ text: '', ai: [], ac: [], ae: [], items: [] }));
+    find.cache.set(ctx.uid, { key, text });
+    return text;
+  }
+  async function readWords(ctx) {
+    const p = ctx.p, doc = docs.get(p.docId), added = ctx.items.filter(isText);
+    const out = { text: '', ai: [], ac: [], ae: [], items: [] };
+    if (!doc || !doc.pdfjs) return out;
+    let temp = null;
+    try {
+      let page;
+      if (Object.keys(ctx.edits).length || added.length) {
+        const bytes = await pagePdf({ docId: p.docId, index: p.index, edits: Object.assign({}, ctx.edits), items: added.map(copyItem) });
+        temp = await pdfjsLib.getDocument({ data: bytes, isEvalSupported: false }).promise;
+        page = await temp.getPage(1);
+      } else {
+        page = await doc.pdfjs.getPage(p.index + 1);
+      }
+      const vp = page.getViewport({ scale: 1, rotation: norm((page.rotate || 0) + p.rot) });
+      const k = ctx.g.vw / vp.width;
+      const tc = await page.getTextContent();
+      const put = (ch, item, from, to) => { out.text += ch; out.ai.push(item); out.ac.push(from); out.ae.push(to); };
+      let gap = true;              // the folded text never starts with a space and never has two in a row
+      for (const it of tc.items) {
+        if (typeof it.str !== 'string') continue;
+        if (it.str) {
+          // the piece's own axes on the page as shown: along the writing, and up from the baseline
+          const m = mul(it.transform, vp.transform), style = (tc.styles && tc.styles[it.fontName]) || {};
+          const la = Math.hypot(m[0], m[1]) || 1, lc = Math.hypot(m[2], m[3]) || 1;
+          const n = out.items.length;
+          out.items.push({
+            str: it.str, fam: /^(serif|monospace)$/.test(style.fontFamily) ? style.fontFamily : 'sans-serif',
+            w: it.width * k, em: lc * k,
+            asc: style.ascent > 0 ? clamp(style.ascent, 0.6, 1) : 0.82,
+            desc: style.descent < 0 ? clamp(style.descent, -0.35, -0.08) : -0.2,
+            x: m[4] * k, y: m[5] * k, ux: m[0] / la, uy: m[1] / la, vx: m[2] / lc, vy: m[3] / lc
+          });
+          let i = 0;
+          for (const ch of it.str) {
+            const to = i + ch.length;
+            if (/\s/.test(ch)) {
+              if (!gap) { put(' ', n, i, to); gap = true; }
+            } else {
+              const f = foldChar(ch);
+              for (let j = 0; j < f.length; j++) put(f[j], n, i, to);
+              if (f) gap = false;
+            }
+            i = to;
+          }
+        }
+        if (it.hasEOL && !gap) { put(' ', -1, 0, 0); gap = true; }
+      }
+    } finally {
+      if (temp) temp.destroy();
+    }
+    return out;
+  }
+
+  // Where one result sits on its page, in points of the page as shown: one box per piece of text.
+  function hitBoxes(h) {
+    if (h.boxes) return h.boxes;
+    const t = h.t, boxes = [];
+    for (let i = h.s; i < h.e;) {
+      const item = t.ai[i];
+      let j = i;
+      while (j + 1 < h.e && t.ai[j + 1] === item) j++;
+      if (item >= 0) {
+        const it = t.items[item];
+        // the font itself is not at hand: widths are shared out as a similar font would
+        measure.font = '16px ' + it.fam;
+        const all = measure.measureText(it.str).width;
+        const part = (n) => (all > 0 ? measure.measureText(it.str.slice(0, n)).width / all : n / it.str.length);
+        const w = it.w > 0 ? it.w : it.em * 0.5 * it.str.length;
+        const x0 = w * part(t.ac[i]), x1 = w * part(t.ae[j]), up = it.asc * it.em;
+        boxes.push({
+          x: it.x + it.ux * x0 + it.vx * up, y: it.y + it.uy * x0 + it.vy * up,
+          w: Math.max(x1 - x0, 1), h: (it.asc - it.desc) * it.em,
+          ux: it.ux, uy: it.uy, dx: -it.vx, dy: -it.vy
+        });
+      }
+      i = j + 1;
+    }
+    h.boxes = boxes;
+    return boxes;
+  }
+  function drawFinds(ctx) {
+    for (const el of ctx.layer.querySelectorAll('.fm')) el.remove();
+    const r = find.open ? find.ranges.get(ctx.uid) : null;
+    if (!r || r[0] === r[1]) return;
+    const frag = document.createDocumentFragment(), z = view.z;
+    for (let i = r[0], made = 0; i < r[1] && made < 4000; i++) {
+      for (const b of hitBoxes(find.hits[i])) {
+        const el = document.createElement('div');
+        el.className = i === find.cur ? 'fm cur' : 'fm';
+        el.style.width = b.w * z + 'px';
+        el.style.height = b.h * z + 'px';
+        el.style.transform = 'matrix(' + [b.ux, b.uy, b.dx, b.dy, b.x * z, b.y * z].map((v) => v.toFixed(4)).join(',') + ')';
+        frag.appendChild(el);
+        made++;
+      }
+    }
+    ctx.layer.prepend(frag);
+  }
+  function redrawFinds() {
+    for (const c of view.ctxs) {
+      if (c.near) drawFinds(c);
+      else for (const el of c.layer.querySelectorAll('.fm')) el.remove();
+    }
+  }
+  function showFind() {
+    const n = find.hits.length;
+    findCount.textContent = n ? (find.cur + 1) + ' di ' + n : find.q ? 'Nessun risultato' : '';
+    findBox.classList.toggle('none', !!find.q && !n);
+    findPrev.disabled = findNext.disabled = !n;
+  }
+  // Brings a result into the part of the page on screen, unless it is already there.
+  function reveal(h) {
+    const b = hitBoxes(h)[0], z = view.z, el = h.ctx.el;
+    if (!b) { goToPage(h.ctx.n); return; }
+    const top = edPages.offsetTop + el.offsetTop + b.y * z, left = edPages.offsetLeft + el.offsetLeft + b.x * z;
+    const vh = edStage.clientHeight, vw = edStage.clientWidth;
+    if (top < edStage.scrollTop + 80 || top > edStage.scrollTop + vh - 70) edStage.scrollTop = top - vh * 0.4;
+    if (left < edStage.scrollLeft + 20 || left > edStage.scrollLeft + vw - 90) edStage.scrollLeft = Math.max(0, left - vw / 2);
+  }
+
+  // keep: the document changed under a search already made, so the place on screen stays where it is
+  function findLater(keep) {
+    if (!find.open) return;
+    findKeep = findTimer ? findKeep && keep : keep;
+    clearTimeout(findTimer);
+    findTimer = setTimeout(() => runFind(findKeep), keep ? 350 : 180);
+  }
+  async function runFind(keep) {
+    clearTimeout(findTimer);
+    findTimer = 0;
+    const token = ++find.token, q = fold(findQ.value), exact = accented(findQ.value), started = Date.now();
+    // the search goes on from the result being shown, or from the page being read
+    const old = find.cur >= 0 ? find.hits[find.cur] : null;
+    const from = old ? { n: old.ctx.n, s: old.s } : { n: view.cur ? view.cur.n : 1, s: 0 };
+    const hits = [], ranges = new Map();
+    find.running = true;
+    let chars = 0;
+    if (q) {
+      let n = 0;
+      for (const ctx of view.ctxs.slice()) {
+        const t = await pageText(ctx);
+        if (token !== find.token || !view.open || !find.open) return;
+        const first = hits.length;
+        let i = t.text.indexOf(q);
+        while (i >= 0) {
+          if (!exact || original(t, i, i + q.length) === exact) {
+            hits.push({ ctx, t, s: i, e: i + q.length, boxes: null });
+            i = t.text.indexOf(q, i + q.length);
+          } else {
+            i = t.text.indexOf(q, i + 1);
+          }
+        }
+        chars += t.text.length;
+        ranges.set(ctx.uid, [first, hits.length]);
+        if (++n % 5 === 0 && Date.now() - started > 400) findCount.textContent = 'Leggo… ' + Math.round(n / view.ctxs.length * 100) + '%';
+      }
+    }
+    find.running = false;
+    find.q = q;
+    find.hits = hits;
+    find.ranges = ranges;
+    find.cur = hits.length ? Math.max(0, hits.findIndex((h) => h.ctx.n > from.n || (h.ctx.n === from.n && h.s >= from.s))) : -1;
+    showFind();
+    redrawFinds();
+    if (find.cur >= 0 && !keep) reveal(hits[find.cur]);
+    if (q && !chars) hint(NO_WORDS); else if (edHint.textContent === NO_WORDS) hint(FIND_HINT);
+  }
+  function stepFind(d) {
+    if (findTimer) { runFind(false); return; }       // what was just typed has not been looked for yet
+    const n = find.hits.length;
+    if (!n || find.running) return;
+    find.cur = (find.cur + d + n) % n;
+    showFind();
+    redrawFinds();
+    reveal(find.hits[find.cur]);
+  }
+  // Reads the pages ahead of the first search, while the words are still being typed.
+  async function warmFind() {
+    const cache = find.cache;
+    for (const ctx of view.ctxs.slice()) {
+      if (!view.open || !find.open || find.cache !== cache) return;
+      await pageText(ctx);
+    }
+  }
+  function openFind() {
+    if (!view.open) return;
+    if (!find.open) {
+      find.open = true;
+      findBox.hidden = false;
+      findBtn.setAttribute('aria-expanded', 'true');
+      showFind();
+      hint(FIND_HINT);
+      if (fold(findQ.value)) runFind(false);
+      warmFind();
+    }
+    findQ.focus();
+    findQ.select();
+  }
+  function closeFind() {
+    if (!find.open) return;
+    const inside = findBox.contains(document.activeElement);
+    find.open = false;
+    find.running = false;
+    find.token++;
+    clearTimeout(findTimer);
+    findTimer = 0;
+    find.q = '';
+    find.hits = [];
+    find.ranges = new Map();
+    find.cur = -1;
+    findBox.hidden = true;
+    findBtn.setAttribute('aria-expanded', 'false');
+    redrawFinds();
+    if (view.open) toolHint();
+    if (inside && view.open) edStage.focus();
+  }
+  function resetFind() {
+    closeFind();
+    find.cache = new Map();
+  }
+  findBtn.addEventListener('click', () => { if (find.open) closeFind(); else openFind(); });
+  $('find-close').addEventListener('click', closeFind);
+  findPrev.addEventListener('click', () => stepFind(-1));
+  findNext.addEventListener('click', () => stepFind(1));
+  findQ.addEventListener('input', () => findLater(false));
+  findQ.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); stepFind(e.shiftKey ? -1 : 1); }
+  });
+  findBox.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    e.stopPropagation();
+    escAt = Date.now();          // Esc here closes the search, not the view
+    closeFind();
   });
 
   // ---- view: saving the document being read -------------------------------------

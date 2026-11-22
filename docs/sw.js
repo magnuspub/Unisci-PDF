@@ -1,5 +1,5 @@
 // Unisci PDF: keeps the installed app working without a network. Written by src/build.js.
-const CACHE = 'unisci-pdf-0120a40845e7';
+const CACHE = 'unisci-pdf-7b038168d5d7';
 const SHELL = ['./', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {

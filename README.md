@@ -34,6 +34,7 @@ Aperto così, un PDF si presenta in lettura con gli strumenti a portata di mano.
 ## Cosa fa
 
 - **Lettura.** Le pagine una sotto l'altra, con zoom e numero di pagina.
+- **Ricerca.** Il pulsante "Cerca", o Ctrl+F, trova una parola o una frase in tutto il documento e segna ogni punto sulla pagina. Invio passa al risultato successivo, Maiusc+Invio al precedente. Maiuscole e accenti non contano, a meno che tu scriva la parola con l'accento: "perche" trova anche "perché", "è" trova solo "è".
 - **Modifica del testo esistente.** Clicchi una riga e la riscrivi. Il testo vecchio viene tolto dal file, non coperto, e quello nuovo usa il carattere del documento.
 - **Testi e firme.** Aggiungi caselle di testo e la tua firma, disegnata con mouse o dito oppure caricata da una foto.
 - **Evidenziatore e fumetti.** Evidenziazioni in più colori e fumetti con una nota che compare al passaggio del mouse. Sono salvati come annotazioni del PDF, quindi restano tali anche negli altri lettori.
@@ -46,6 +47,7 @@ Aperto così, un PDF si presenta in lettura con gli strumenti a portata di mano.
 - La modifica del testo cambia la singola riga: il paragrafo non va a capo da solo.
 - Un PDF contiene solo le lettere usate nel documento. Se ne scrivi una che manca, quella lettera esce in un carattere simile.
 - Le scansioni e il testo dentro blocchi incorporati non sono modificabili.
+- La ricerca non trova nulla nelle scansioni senza testo, né le parole spezzate a fine riga con il trattino. Il segno sul risultato può essere spostato di poco rispetto alla parola.
 - La firma è un'immagine, non una firma digitale con certificato.
 - Le protezioni diverse dalla password standard dei PDF non sono supportate.
 - I moduli PDF non si possono compilare.
